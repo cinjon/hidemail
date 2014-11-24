@@ -1,0 +1,54 @@
+body {
+   font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+   font-weight: 300;
+}
+
+.content {
+    height: 90%;
+    /*padding-top:50px;*/
+    width: 90%;
+    margin: auto;
+}
+
+::-webkit-input-placeholder {
+    color: rgba(9, 14, 207, .5);
+}
+:-moz-placeholder {
+    color: rgba(9, 14, 207, .5);
+}
+::-moz-placeholder {
+    color: rgba(9, 14, 207, .5);
+}
+:-ms-input-placeholder {
+    color: rgba(9, 14, 207, .5);
+}
+
+/* For Angular-UI Bootstrap */
+.nav, .pagination, .carousel, .panel-title a { cursor: pointer; }
+
+
+/* Home page */
+
+.full {
+  -webkit-background-size: cover;
+  -moz-background-size: cover;
+  -o-background-size: cover;
+  background-size: cover;
+  background-attachment: fixed;
+  overflow: hidden;
+  min-height: 100%;
+}
+
+@media only screen and (max-device-width: 750px) {
+    .tel-input {
+        width: 100%;
+    }
+
+    .byline {
+        font-size: 26px;
+    }
+
+    input.phone {
+        font-size: 26px;
+    }
+}
