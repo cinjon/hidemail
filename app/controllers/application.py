@@ -21,6 +21,11 @@ def page_not_found(e):
 def basic_pages():
     return make_response(open('app/public/template/index.html').read())
 
+@app.flask_app.route('/me')
+def profile():
+    # TODO: Add in login check decorator
+    return make_response(open('app/public/template/index.html').read())
+
 # @app.flask_app.route('/google34d3fe92d155a2aa.html')
 # def google_verification(**kwargs):
 #     return make_response(open('app/public/template/google34d3fe92d155a2aa.html').read())

@@ -7,7 +7,14 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
   .controller('about', function($scope) {
 
   })
-  .controller('home', function($scope, Post) {
+  .controller('home', function($scope) {
+
+  })
+  .controller('me', function($scope) {
+    /*
+       Get the timeblock info for the user and put it in here.
+       Load up a time adjuster.
+    */
   })
   .config([
     '$routeProvider', '$locationProvider',
@@ -20,6 +27,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
         .when('/about', {
           templateUrl: '/static/partials/about.html',
           controller: 'about'
+        })
+        .when('/me', {
+          templateUrl: '/static/partials/me.html',
+          controller: 'me'
         })
 	.otherwise({
 	  redirectTo: '/'
