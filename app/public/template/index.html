@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" ng-app="DeathMsg">
+<html lang="en" ng-app="HideMail">
 <head>
   <meta charset="utf-8">
   <title>Hide Mail</title>
@@ -16,6 +16,8 @@
   <script src="/static/lib/angular/angular-route.js"></script>
   <script src="/static/lib/angular/angular-resource.js"></script>
   <script src="/static/lib/loading/loading-bar.js"></script>
+  <script src="/static/lib/satellizer.js"></script>
+  <script src="/static/lib/angular-local-storage.min.js"></script>
 
   <script src="/static/js/modules.js"></script>
   <script src="/static/js/directives.js"></script>
@@ -25,6 +27,7 @@
   <div class="overlay">
     <div class="container page">
       <div class="content" ng-controller="main">
+        <h1>This is an inserted script: </h1>
         <div class="view" ng-view></div>
       </div>
     </div>

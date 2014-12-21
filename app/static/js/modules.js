@@ -1,41 +1,154 @@
 'use strict';
 
-angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-loading-bar'])
-  .controller('main', function($scope) {
-
+angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-loading-bar', 'satellizer'])
+  .controller('main', function($scope, $http, $auth) {
+    $scope.userToken = $auth.getToken()
+    console.log('ut: ' + $scope.userToken)
+    $scope.user = null;
+    if ($scope.userToken) {
+      console.log('we ahve a user token')
+      $http.get('/api/user-from-token/' + $scope.userToken).then(function(response) {
+        console.log(response);
+        var data = response.data;
+        if (data.success == true) {
+          if (data.user) {
+            $scope.user = data.user;
+          }
+          if (data.token == false) {
+            $auth.logout()
+          }
+        }
+      })
+    }
   })
   .controller('about', function($scope) {
 
   })
-  .controller('home', function($scope) {
+  .controller('home', function($scope, $auth) {
+    $scope.$watch('$parent.user', function(newValue) {
+      $scope.user = newValue;
+    });
 
+    $scope.logout = function() {
+      $scope.$parent.user = null;
+      $auth.logout();
+    }
+
+    $scope.oauth = function() {
+      console.log('hi in home oauth')
+      $auth.authenticate('google').then(function(response) {
+        if (response.data.success) {
+          $scope.$parent.user = response.data.user
+        }
+      })
+    }
   })
-  .controller('me', function($scope) {
+  .controller('login', function($scope, $auth) {
+    $scope.oauth = function() {
+      console.log('hi in login oauth')
+      $auth.authenticate('google').then(function(response) {
+        console.log(response);
+      })
+    }
+  })
+  .controller('signup', function($scope, $auth) {
+    $scope.oauth = function() {
+      console.log('hi in signup oauth')
+      $auth.authenticate('google').then(function(response) {
+        console.log(response);
+      })
+    }
+  })
+  .controller('profile', function($scope) {
     /*
        Get the timeblock info for the user and put it in here.
        Load up a time adjuster.
     */
   })
+  .controller('timeblocks', function($scope, $http, Post) {
+    $http.get('/my-timezone').then(function(result) {
+      $scope.currTimezone = result.data;
+    })
+    $scope.timezones = ['tz1', 'tz2', 'tz3', 'tz4']
+
+    $scope.blocks = [
+      {'time':'16:30', 'description':'30 Minute Block'},
+      {'time':'17:00', 'description':'30 Minute Block'},
+      {'time':'08:30', 'description':'60 Minute Block'}
+    ]
+    $scope.times = $scope.blocks.map(function(block) { return block.time })
+
+    $scope.getAvailableTimes = function(block) {
+      var allHours = Array.apply(null, Array(24)).map(function (_, i) {
+        if (i < 10) {
+          return '0' + i;
+        } else {
+          return i;
+        }
+      })
+      var allMinutes = ['00', '30']
+      var ret = []
+      allHours.forEach(function(hour) {
+        allMinutes.forEach(function(minute) {
+          var time = hour + ':' + minute;
+          if ($scope.times.indexOf(time) == -1) {
+            ret.push(hour + ':' + minute);
+          }
+        })
+      })
+      ret.unshift(block.time);
+      return ret
+    }
+
+    $scope.$watch('blocks', function(newValue) { //Making multiple requests
+      Post.postBlocks(newValue)
+    }, true)
+    $scope.$watch('currTimezone', function(newValue) { //Making multiple requests
+      Post.postTimezone(newValue)
+    })
+  })
   .config([
-    '$routeProvider', '$locationProvider',
-    function($routeProvider, $locationProvider) {
+    '$routeProvider', '$locationProvider', '$authProvider',
+    function($routeProvider, $locationProvider, $authProvider) {
       $routeProvider
 	.when('/', {
 	  templateUrl: '/static/partials/home.html',
           controller: 'home'
 	})
+        .when('/login', {
+          templateUrl: '/static/partials/login.html',
+          controller: 'login'
+        })
+        .when('/signup', {
+          templateUrl: '/static/partials/signup.html',
+          controller: 'signup'
+        })
         .when('/about', {
           templateUrl: '/static/partials/about.html',
           controller: 'about'
         })
         .when('/me', {
-          templateUrl: '/static/partials/me.html',
-          controller: 'me'
+          templateUrl: '/static/partials/profile.html',
+          controller: 'profile',
+          resolve: {
+            authenticated: function($location, $auth) {
+              if (!$auth.isAuthenticated()) {
+                return $location.path('/');
+              }
+            }
+          }
+        })
+        .when('/timeblocks', {
+          templateUrl: '/static/partials/timeblocks.html',
+          controller: 'timeblocks'
         })
 	.otherwise({
 	  redirectTo: '/'
 	});
       $locationProvider.html5Mode(true);
+      $authProvider.google({
+        clientId: '25163235185-htbit88rhvikp405ccsgoh31cdr3pjim.apps.googleusercontent.com'
+      });
     }
   ]);
 
