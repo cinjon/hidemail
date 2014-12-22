@@ -12,6 +12,7 @@ from sqlalchemy.sql.expression import func, select
 from flask.ext.mobility.decorators import mobile_template
 
 config = app.flask_app.config
+logger = app.flask_app.logger
 
 # special file handlers and error handlers
 @app.flask_app.route('/favicon.ico')
@@ -32,7 +33,7 @@ def basic_pages():
 
 def create_token(inbox):
     payload = {
-        'sub': inbox.google,
+        'sub': inbox.google_id,
         'iat': datetime.now(),
         'exp': datetime.now() + timedelta(days=14)
         }
@@ -101,35 +102,37 @@ def google():
                    code=payload['code'],
                    grant_type='authorization_code')
 
-    #Ok, now how the fuck do I get the refresh token too?
     # Step 1. Exchange authorization code for access token.
     r = requests.post(access_token_url, payload)
     token = json.loads(r.text)
-    logger.debug(token)
-    headers = {'Authorization': 'Bearer {0}'.format(token['access_token'])}
+    access_token = token['access_token']
+    refresh_token = token.get('refresh_token')
+    expires_in = token['expires_in']
+    headers = {'Authorization': 'Bearer {0}'.format(access_token)}
 
     # Step 2. Retrieve information about the current inbox.
     r = requests.get(api_url, headers=headers)
     profile = json.loads(r.text)
-    logger.debug(r.text)
-
-    api_key = 'AIzaSyBQ_7NKpNxJPiWyiwutKVQM-ur5kbcO718'
-    r2 = requests.get('https://www.googleapis.com/gmail/v1/users/me/labels?key=%s' % api_key, headers=headers)
-    logger.debug(r2.text)
 
     sub = profile.get('sub')
     if not sub:
         return jsonify()
 
-    inbox = app.models.Inbox.query.filter_by(google=sub).first()
+    inbox = app.models.Inbox.query.filter_by(google_id=sub).first()
     if inbox:
         token = create_token(inbox)
         return jsonify(token=token, user=inbox.serialize(), success=True)
+
+    email = profile.get('email')
     name = profile.get('displayName') or profile.get('name')
-    inbox = app.models.Inbox(google=sub, name=name, email=profile.get('email'))
+    inbox = app.models.Inbox(name=name, email=email, google_id=sub)
+    inbox.set_google_access_token(access_token, expires_in, refresh_token, commit=False)
     app.db.session.add(inbox)
     app.db.session.commit()
     token = create_token(inbox)
+
+    app.controllers.mailbox.create_label(inbox) # do this asynchronously
+
     return jsonify(token=token, user=inbox.serialize(), success=True)
 
 @app.flask_app.route('/my-timezone')
@@ -140,18 +143,11 @@ def mytimezone():
 def update_blocks():
     payload = request.json
     return jsonify(success="success")
-    # payload = dict(client_id=payload['clientId'],
-    #                redirect_uri=payload['redirectUri'],
-    #                client_secret=config['GOOGLE_SECRET'],
-    #                code=payload['code'],
-    #                grant_type='authorization_code')
 
 @app.flask_app.route('/update-timezone', methods=['POST'])
 def update_timezone():
     payload = request.json
     return jsonify(success="success")
-
-logger = app.flask_app.logger
 
 @app.flask_app.route('/api/user-from-token/<token>')
 def user_from_token(token):
@@ -160,7 +156,7 @@ def user_from_token(token):
         sub = decoded.get('sub')
         if not sub:
             return jsonify(success=False)
-        inbox = app.models.Inbox.query.filter_by(google=str(sub)).first()
+        inbox = app.models.Inbox.query.filter_by(google_id=str(sub)).first()
         if not inbox:
             logger.debug('no inbox...')
             return jsonify(success=True, token=False)
