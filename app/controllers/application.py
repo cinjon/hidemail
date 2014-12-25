@@ -62,12 +62,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-@app.flask_app.route('/api/me')
-@login_required
-def me():
-    inbox = Inbox.query.filter_by(id=g.inbox_id).first()
-    return jsonify(inbox.serialize())
-
 @app.flask_app.route('/me')
 def profile():
     return make_response(open('app/public/template/index.html').read())
@@ -95,6 +89,7 @@ def google():
     access_token_url = 'https://accounts.google.com/o/oauth2/token'
     api_url = 'https://www.googleapis.com/plus/v1/people/me/openIdConnect'
 
+    tz_offset = int(request.json.get('state', {}).get('tzOffset', -5*60))
     payload = request.json
     payload = dict(client_id=payload['clientId'],
                    redirect_uri=payload['redirectUri'],
@@ -121,33 +116,54 @@ def google():
     inbox = app.models.Inbox.query.filter_by(google_id=sub).first()
     if inbox:
         token = create_token(inbox)
-        return jsonify(token=token, user=inbox.serialize(), success=True)
+        if not inbox.last_timezone_adj_time:
+            inbox.setup_tz_on_arrival(tz_offset)
+        if not inbox.last_timeblock_adj_time:
+            inbox.setup_tb_on_arrival()
+        return jsonify(token=token, user=inbox.basic_info(), success=True)
 
     email = profile.get('email')
     name = profile.get('displayName') or profile.get('name')
     inbox = app.models.Inbox(name=name, email=email, google_id=sub)
     inbox.set_google_access_token(access_token, expires_in, refresh_token, commit=False)
+    inbox.setup_tz_on_arrival(tz_offset, commit=False)
+    inbox.setup_tb_on_arrival(commit=False)
     app.db.session.add(inbox)
     app.db.session.commit()
     token = create_token(inbox)
 
     app.controllers.mailbox.create_label(inbox) # do this asynchronously
+    return jsonify(token=token, user=inbox.basic_info(), success=True)
 
-    return jsonify(token=token, user=inbox.serialize(), success=True)
-
-@app.flask_app.route('/my-timezone')
-def mytimezone():
-    return 'tz3'
+@app.flask_app.route('/api/get-time-info/<email>', methods=['GET'])
+def get_time_info(email):
+    inbox = app.models.Inbox.query.filter_by(email=email).first()
+    if not inbox:
+        return jsonify(success=False)
+    return jsonify(success=True, user=inbox.serialize())
 
 @app.flask_app.route('/update-blocks', methods=['POST'])
 def update_blocks():
-    payload = request.json
-    return jsonify(success="success")
+    payload = request.json['data']
+    inbox = app.models.Inbox.query.filter_by(email=payload['email']).first()
+    if not inbox:
+        return jsonify(success=False)
+    for block in payload['timeblocks']:
+        inbox.set_timeblock(int(block['start']), int(block['length']), commit=False)
+    inbox.last_timeblock_adj_time = app.utility.get_time()
+    app.db.session.commit()
+    return jsonify(success=True, user=inbox.serialize())
 
 @app.flask_app.route('/update-timezone', methods=['POST'])
 def update_timezone():
-    payload = request.json
-    return jsonify(success="success")
+    payload = request.json['data']
+    inbox = app.models.Inbox.query.filter_by(email=payload['email']).first()
+    if not inbox:
+        return jsonify(success=False)
+    inbox.set_timezone(offset=int(payload['tz']), commit=False)
+    inbox.last_timezone_adj_time = app.utility.get_time()
+    app.db.session.commit()
+    return jsonify(success=True, user=inbox.serialize())
 
 @app.flask_app.route('/api/user-from-token/<token>')
 def user_from_token(token):
@@ -158,9 +174,8 @@ def user_from_token(token):
             return jsonify(success=False)
         inbox = app.models.Inbox.query.filter_by(google_id=str(sub)).first()
         if not inbox:
-            logger.debug('no inbox...')
             return jsonify(success=True, token=False)
-        return jsonify(user=inbox.serialize(), success=True, token=token) #update token
+        return jsonify(user=inbox.basic_info(), success=True, token=token)
     except Exception, e:
         app.flask_app.logger.debug('exception %s' % e)
         return jsonify(success=False)
