@@ -6,6 +6,7 @@ import random
 import os
 import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import desc
 
 class Inbox(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -21,6 +22,8 @@ class Inbox(db.Model):
     google_refresh_token = db.Column(db.Text)
     custom_label_name = db.Column(db.String(25))
     custom_label_id = db.Column(db.String(25))
+    last_timezone_adj_time = db.Column(db.DateTime)
+    last_timeblock_adj_time = db.Column(db.DateTime)
 
     def __init__(self, email=None, password=None, name=None, google_id=None, google_access_token=None, google_refresh_token=None, custom_label_name=None, custom_label_id=None, google_access_token_expiration=None):
         self.email = None
@@ -35,11 +38,24 @@ class Inbox(db.Model):
         self.google_refresh_token = google_refresh_token
         self.custom_label_name = custom_label_name
         self.custom_label_id = custom_label_id
+        self.last_timezone_adj_time = None
+        self.last_timeblock_adj_time = None
 
     def clear_access_tokens(self):
         self.google_access_token = None
         self.google_refresh_token = None
         db.session.commit()
+
+    def setup_tz_on_arrival(self, tz_offset, commit=False):
+        self.set_timezone(offset=tz_offset, commit=False)
+        if commit:
+            db.session.commit()
+
+    def setup_tb_on_arrival(self, commit=True):
+        self.set_timeblock(start_time=8*60, length=60, commit=False)
+        self.set_timeblock(start_time=17*60, length=60, commit=False)
+        if commit:
+            db.session.commit()
 
     def set_name(self, name):
         self.name = name
@@ -57,21 +73,47 @@ class Inbox(db.Model):
         self.google_refresh_token = refresh_token or self.google_refresh_token
         self.google_access_token_expiration = datetime.datetime.now() + datetime.timedelta(0, int(expires_in))
         if commit:
-            app.db.session.commit()
+            db.session.commit()
 
     def check_password(self, password):
         return check_password_hash(self.password, password)
 
-    def set_timezone(self, timezone=None, offset=None):
+    def set_timezone(self, timezone=None, offset=None, commit=True):
         if not timezone:
             timezone = get_or_create_timezone(offset)
         timezone.add_inbox(self)
+        if commit:
+            db.session.commit()
+
+    def set_timeblock(self, start_time, length, commit=True):
+        create_timeblock(self, length, start_time, commit)
 
     def get_timeblocks(self):
-        return self.timeblocks
+        return self.timeblocks.order_by(desc(Timeblock.creation_time)).limit(2)
+
+    @staticmethod
+    def is_time_adjust_helper(time):
+        now = utility.get_time()
+        return not time or _is_out_of_range(time, now - datetime.timedelta(2), now - datetime.timedelta(0, 600))
+
+    def is_tz_adjust(self):
+        return self.is_time_adjust_helper(self.last_timezone_adj_time)
+
+    def is_tb_adjust(self):
+        return self.is_time_adjust_helper(self.last_timeblock_adj_time)
+
+    def basic_info(self):
+        return {'name':self.name, 'email':self.email}
 
     def serialize(self):
-        return {'name':self.name, 'email':self.email}
+        tz = Timezone.query.get(self.timezone_id).offset
+        return {'name':self.name, 'email':self.email,
+                'lastTzAdj':self.last_timezone_adj_time, 'lastTbAdj':self.last_timeblock_adj_time,
+                'currTzOffset':tz, 'timeblocks':sorted([tb.serialize() for tb in self.get_timeblocks()], key=lambda k:k['start'])
+                }
+
+def _is_out_of_range(time, beg, end):
+    return time < beg or time > end
 
 class Timeblock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -85,26 +127,32 @@ class Timeblock(db.Model):
         self.start_time = start_time
         self.creation_time = utility.get_time()
 
-def create_timeblock(inbox, length, start_time):
+    def serialize(self):
+        return {'start':self.start_time, 'length':self.length}
+
+def create_timeblock(inbox, length, start_time, commit=True):
     timeblock = Timeblock(length, start_time)
     inbox.timeblocks.append(timeblock)
     db.session.add(timeblock)
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return timeblock
 
 class Timezone(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     inboxes = db.relationship('Inbox', backref='timezone', lazy='dynamic')
-    offset = db.Column(db.Integer)
+    offset = db.Column(db.Integer) # in minutes
+    # identifier = db.Column(db.Text)
 
-    def __init__(self, offset):
+    def __init__(self, offset):# , identifier):
         self.offset = offset
+        # self.identifier = identifier
 
     def add_inbox(self, inbox):
         self.inboxes.append(inbox)
         db.session.commit()
 
-    def inboxes(self):
+    def get_inboxes(self):
         return self.inboxes
 
 def create_timezone(offset):
@@ -122,5 +170,5 @@ def get_or_create_timezone(offset):
 def get_inboxes_from_offset(offset):
     timezone = Timezone.query.filter_by(offset=offset).first()
     if timezone:
-        return timezone.inboxes()
+        return timezone.get_inboxes()
     return None
