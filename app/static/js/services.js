@@ -1,26 +1,20 @@
 'use strict';
 
-angular.module('hidemailServices', ['ngRoute', 'ngResource'])
+angular.module('hidemailServices', ['ngRoute', 'ngResource', 'LocalStorageModule'])
   .factory('Post', function($http) {
     return {
-      postOauth: function() {
-        return $http.post('/login/google', {
-          headers: {'Content-Type': undefined},
-          transformRequest: angular.identity
-        });
-      },
-      postBlocks: function(blocks) {
+      postBlocks: function(email, blocks) {
         return $http.post('/update-blocks', {
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          data: blocks
+          data: {'timeblocks':blocks, 'email':email}
         })
       },
-      postTimezone: function(tz) {
+      postTimezone: function(email, tzOffset) {
         return $http.post('/update-timezone', {
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          data: tz
+          data: {'tz':tzOffset, 'email':email}
         })
-      }
+      },
     }
   })
   .factory('Get', function($http) {
@@ -29,4 +23,34 @@ angular.module('hidemailServices', ['ngRoute', 'ngResource'])
         return $http.get('/api/user-from-token/' % token)
       }
     }
-  });
+  })
+  .factory('UserData', function() {
+    var userData = null;
+    function setUser(data) {
+      userData = data;
+    }
+    function getUser() {
+      return userData;
+    }
+
+    return {
+      getUser: getUser,
+      setUser: setUser
+    }
+  })
+  .factory('LocalStorage', function(localStorageService) {
+    return {
+      get: function(key) {
+        return localStorageService.get(key)
+      },
+      set: function(key, value) {
+        localStorageService.set(key, value);
+      },
+      isSupported: function() {
+        return localStorageService.isSupported;
+      },
+      remove: function(key) {
+        return localStorageService.remove(key);
+      }
+    }
+  })
