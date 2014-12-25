@@ -31,10 +31,11 @@
           scopePrefix: 'openid',
           scopeDelimiter: ' ',
           requiredUrlParams: ['scope'],
-          optionalUrlParams: ['display', 'access_type'],
+          optionalUrlParams: ['display', 'access_type', 'approval_prompt'],
           display: 'popup',
           type: '2.0',
           accessType: 'offline',
+          approvalPrompt: 'force',
           popupOptions: { width: 452, height: 633 }
         },
         facebook: {
@@ -427,7 +428,6 @@
               });
             });
 
-            console.log(keyValuePairs);
             return keyValuePairs.map(function(pair) {
               return pair.join('=');
             }).join('&');
