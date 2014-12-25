@@ -1,61 +1,58 @@
 'use strict';
 
+var lsKey = 'BatchMail-user';
+
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-loading-bar', 'satellizer'])
-  .controller('main', function($scope, $http, $auth) {
-    $scope.userToken = $auth.getToken()
-    console.log('ut: ' + $scope.userToken)
-    $scope.user = null;
-    if ($scope.userToken) {
-      console.log('we ahve a user token')
-      $http.get('/api/user-from-token/' + $scope.userToken).then(function(response) {
-        console.log(response);
-        var data = response.data;
-        if (data.success == true) {
-          if (data.user) {
-            $scope.user = data.user;
-          }
-          if (data.token == false) {
-            $auth.logout()
-          }
+  .controller('main', function($scope, $http, $auth, LocalStorage) {
+    $scope.getUser = function(callback) {
+      var isSupported = LocalStorage.isSupported()
+      if (!isSupported || !LocalStorage.get(lsKey)) {
+        var userToken = $auth.getToken()
+        if (userToken) {
+          $http.get('/api/user-from-token/' + userToken).then(function(response) {
+            var data = response.data;
+            if (data.success == true) {
+              if (data.user) {
+                callback(data.user);
+                LocalStorage.set(lsKey, data.user);
+              } else if (data.token == false) {
+                $auth.logout()
+              }
+            }
+          })
         }
-      })
+      } else if (isSupported) {
+        var user = LocalStorage.get(lsKey)
+        if (user) {
+          callback(user);
+        }
+      }
     }
   })
   .controller('about', function($scope) {
 
   })
-  .controller('home', function($scope, $auth) {
-    $scope.$watch('$parent.user', function(newValue) {
-      $scope.user = newValue;
-    });
+  .controller('home', function($scope, $auth, Post, LocalStorage) {
+    if (!$scope.user) {
+      $scope.$parent.getUser(function(user) {
+        $scope.user = user;
+      })
+    }
 
     $scope.logout = function() {
-      $scope.$parent.user = null;
+      $scope.user = null;
+      LocalStorage.remove(lsKey);
       $auth.logout();
     }
 
     $scope.oauth = function() {
-      console.log('hi in home oauth')
-      $auth.authenticate('google').then(function(response) {
+      $auth.authenticate('google', {'state':{'tzOffset':new Date().getTimezoneOffset()}}).then(function(response) {
         if (response.data.success) {
-          $scope.$parent.user = response.data.user
+          $scope.user = response.data.user;
+          LocalStorage.set(lsKey, $scope.user)
+        } else {
+          console.log('failed to authenticate.');
         }
-      })
-    }
-  })
-  .controller('login', function($scope, $auth) {
-    $scope.oauth = function() {
-      console.log('hi in login oauth')
-      $auth.authenticate('google').then(function(response) {
-        console.log(response);
-      })
-    }
-  })
-  .controller('signup', function($scope, $auth) {
-    $scope.oauth = function() {
-      console.log('hi in signup oauth')
-      $auth.authenticate('google').then(function(response) {
-        console.log(response);
       })
     }
   })
@@ -65,47 +62,137 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
        Load up a time adjuster.
     */
   })
-  .controller('timeblocks', function($scope, $http, Post) {
-    $http.get('/my-timezone').then(function(result) {
-      $scope.currTimezone = result.data;
-    })
-    $scope.timezones = ['tz1', 'tz2', 'tz3', 'tz4']
-
-    $scope.blocks = [
-      {'time':'16:30', 'description':'30 Minute Block'},
-      {'time':'17:00', 'description':'30 Minute Block'},
-      {'time':'08:30', 'description':'60 Minute Block'}
-    ]
-    $scope.times = $scope.blocks.map(function(block) { return block.time })
-
-    $scope.getAvailableTimes = function(block) {
-      var allHours = Array.apply(null, Array(24)).map(function (_, i) {
-        if (i < 10) {
-          return '0' + i;
-        } else {
-          return i;
-        }
-      })
-      var allMinutes = ['00', '30']
-      var ret = []
-      allHours.forEach(function(hour) {
-        allMinutes.forEach(function(minute) {
-          var time = hour + ':' + minute;
-          if ($scope.times.indexOf(time) == -1) {
-            ret.push(hour + ':' + minute);
+  .controller('timeblocks', function($scope, $http, Post, $timeout) {
+    $scope.$parent.getUser(function(user) {
+      if (!user) {
+        $location.path('/')
+      } else {
+        $scope.user = user;
+        $http.get('/api/get-time-info/' + user.email).then(function(response) {
+          var data = response.data;
+          if (data.success) {
+            setUser(data.user);
+          } else {
+            console.log('oops, coulnt get the users time info')
           }
         })
-      })
-      ret.unshift(block.time);
-      return ret
+      }
+    })
+
+    var setUser = function(user) {
+      $scope.user = user;
+      if ($scope.user.lastTzAdj) {
+        $scope.user.lastTzAdj = new Date($scope.user.lastTzAdj)
+      }
+      if ($scope.user.lastTbAdj) {
+        $scope.user.lastTbAdj = new Date($scope.user.lastTbAdj)
+      }
+      setBlocks($scope.user)
     }
 
-    $scope.$watch('blocks', function(newValue) { //Making multiple requests
-      Post.postBlocks(newValue)
-    }, true)
-    $scope.$watch('currTimezone', function(newValue) { //Making multiple requests
-      Post.postTimezone(newValue)
-    })
+    var setBlocks = function(user) {
+      $scope.blocks = user.timeblocks.map(function(block) {
+        var period = 'PM'
+        var length = block.length
+        var hour = parseInt(block.start)/60
+        if (hour < 12) {
+          period = 'AM'
+        }
+        if (hour > 12) {
+          hour = hour - 12;
+        }
+        if (hour == 0) {
+          hour = 12;
+        }
+        return {'length':length, 'time':hour + ' ' + period}
+      })
+      $scope.times = $scope.blocks.map(function(block) { return block.time })
+    }
+
+    $scope.setTimezone = function() {
+      var tzOffset = (new Date()).getTimezoneOffset()
+      Post.postTimezone($scope.user.email, tzOffset).then(function(response) {
+        var data = response.data;
+        if (data.success) {
+          setUser(data.user);
+        } else {
+          console.log('failure in posting timezone');
+        }
+      })
+    }
+
+    $scope.getSetTimezoneDesc = function() {
+      if ($scope.canSetTimezone()) {
+        return "Set to current timezone:";
+      } else {
+        return "Timezone currently set to:";
+      }
+    }
+    $scope.canSetTimezone = function() { //This gets called every single time the clock ticks
+      return canSetTimeHelper($scope.user.lastTzAdj, $scope.user.currTzOffset);
+    }
+    $scope.canSetTimeblocks = function() {
+      return canSetTimeHelper($scope.user.lastTbAdj);
+    }
+    var canSetTimeHelper = function(time, offset) {
+      var now = new Date();
+      if (!time) {
+        return true;
+      } else if (offset && offset == now.getTimezoneOffset()) {
+        return false;
+      } else {
+        return is_out_of_range(time, new Date(time - 1000*60*60*24*2), new Date(now - 1000*60*15))
+      }
+    }
+    var is_out_of_range = function(time, beg, end) {
+      return time < beg || time > end
+    }
+
+    $scope.tickInterval = 1000
+    var tick = function() {
+      $scope.clock = Date.now()
+      $timeout(tick, $scope.tickInterval);
+    }
+    $timeout(tick, $scope.tickInterval);
+
+    $scope.getBlockDescription = function(block) {
+      return numToWords(block.length.toString()) + ' Minute Block: '
+    }
+
+    $scope.getAvailableTimes = function(blockTime) {
+      var ret = allTimes.filter(function(time) { return $scope.times.indexOf(time) == -1 })
+      ret.unshift(blockTime);
+      return ret;
+    }
+
+    $scope.updateBlocks = function() {
+      var timeblocks = $scope.blocks.map(function(block) {
+        var parts = block.time.split(' ');
+        var period = parts[1].toLowerCase()
+        var hour = parseInt(parts[0])
+        var start_time = 0;
+        if (period == 'am') {
+          if (hour < 12) {
+            start_time = hour * 60;
+          }
+        } else if (period == 'pm') {
+          start_time = hour * 60;
+          if (hour < 12) {
+            start_time += 12*60;
+          }
+        }
+        return {length:block.length, start:start_time};
+      })
+
+      Post.postBlocks($scope.user.email, timeblocks).then(function(response) {
+        var data = response.data;
+        if (data.success) {
+          setUser(data.user);
+        } else {
+          console.log('failure in posting blocks');
+        }
+      })
+    }
   })
   .config([
     '$routeProvider', '$locationProvider', '$authProvider',
@@ -159,6 +246,15 @@ function redirectIfNotArgs(params, $location) {
     }
   }
 }
+
+var numToWords = function(num) {
+  if (num == 60) {
+    return 'Sixty';
+  }
+}
+
+var allHours = [12].concat(Array.apply(null, Array(11)).map(function (_, i) { return i+1 }))
+var allTimes = allHours.map(function(hour) { return hour.toString() + ' AM' }).concat(allHours.map(function(hour) { return hour.toString() + ' PM' }))
 
 window.mobilecheck = function() {
   var check = false;
