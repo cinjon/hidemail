@@ -28,22 +28,15 @@ def _get_thread_ids_from_label(inbox, label):
     try:
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
-            logger.debug(r.text)
-            logger.debug('Error in getting thread ids: %d.' % r.status_code)
             return []
         result = json.loads(r.text)
         while 'nextPageToken' in result:
-            logger.debug('dong nextpagetoken')
             thread_ids.extend([t['id'] for t in result['threads']])
             r = request.get('&'.join([url, 'pageToken=%s' % result['nextPageToken']]))
             if int(r.status_code) != 200:
-                logger.debug(r.text)
-                logger.debug('Error in getting thread ids: %d.' % r.status_code)
                 return thread_ids
             result = json.loads(r.text)
-        logger.debug(result)
         thread_ids.extend([t['id'] for t in result['threads']])
-        logger.debug('length of thread_ids: %d' % len(thread_ids))
         return thread_ids
     except Exception, e:
         logger.debug('Error in getting thread ids for %s from label %s: %s' % (inbox.email, label, e))
@@ -53,34 +46,28 @@ def modify_threads(inbox, addLabel, removeLabel):
     headers = get_headers(inbox, content_type='application/json')
     payload = dict(removeLabelIds=[removeLabel], addLabelIds=[addLabel])
     thread_ids = _get_thread_ids_from_label(inbox, removeLabel)
-    logger.debug(thread_ids)
     for thread_id in thread_ids:
         url = base_url + '/%s/threads/%s/modify?key=%s' % (inbox.email, thread_id, api_key)
         try:
             r = requests.post(url, data=json.dumps(payload), headers=headers)
-            logger.debug(r.text)
             if r.status_code != 200:
                 return False
         except Exception, e:
-            logger.debug('Error in modifying threads for inbox %s. Was trying to add to %s and remove from %s.' % (inbox.email, addLabel, removeLabel))
             return False
     return True
 
 def hide_all_mail(inbox):
     if not is_fresh_token(inbox):
-        logger.debug('not fresh token in hide mail')
         return
     return modify_threads(inbox, inbox.custom_label_id, 'INBOX')
 
 def show_all_mail(inbox):
     if not is_fresh_token(inbox):
-        logger.debug('not fresh token in show mail')
         return
     return modify_threads(inbox, 'INBOX', inbox.custom_label_id)
 
 def create_label(inbox, label_name=None):
     if not is_fresh_token(inbox):
-        logger.debug('not fresh token in create_label')
         return
 
     label_name = label_name or 'BatchMail-%s' % ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
@@ -115,15 +102,13 @@ def revoke_access(inbox=None, access_token=None):
         logger.debug(r.text)
 
 def refresh_access(inbox):
-    logger.debug('Refreshing access for %s' % inbox.email)
     url = 'https://www.googleapis.com/oauth2/v3/token'
     payload = {'client_id':app.flask_app.config['GOOGLE_ID'],
                'client_secret':app.flask_app.config['GOOGLE_SECRET'],
-               'refresh_token':inbox.refresh_token,
+               'refresh_token':inbox.google_refresh_token,
                'grant_type':'refresh_token'}
     try:
         r = requests.post(url, payload)
-        logger.debug('in refresh access: %s' % r.text)
         result = json.loads(r.text)
         inbox.set_google_access_token(result.get('access_token'), result.get('expires_in'))
         return True
