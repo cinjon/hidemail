@@ -52,3 +52,27 @@ body {
         font-size: 26px;
     }
 }
+
+.btn-white {
+    background-color:white;
+}
+.timezone {
+    margin-top:30px;
+    margin-bottom:30px;
+}
+.timehour {
+    margin-top:30px;
+    margin-bottom:30px;
+}
+.timeChoice {
+    font-size:25px;
+    height:60px;
+    width:160px;
+}
+.timeSelect {
+    text-indent:25%
+}
+.timeText {
+    font-size:25px;
+    top:10px;
+}
