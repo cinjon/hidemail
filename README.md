@@ -10,9 +10,9 @@ X 1. Figure out models
     - Inbox represents a person. It's not users as much as it is inboxes because they're all connected to GMail. Many to many with Timezones. One to many with Timeblocks. Has an auth token and user email and something else related to gmail acc ... what?
     - Timeblock represents a chunk of time that they can see their email. It's of a certain length in minutes and has a start time given in minutes since the day started.
     - Timezone represents a timezone offset from GMT (UTC?).
-2. Set up postgres DB
-3. Put up dummy page to test OAuth Access
-4. Setup OAuth to get access for IMAP (to get push notifs) and Gmail API scopes
+X 2. Set up postgres DB
+X 3. Put up dummy page to test OAuth Access
+X 4. Setup OAuth to get access for Gmail API scopes
 5. Setup page to set times (free: 1 1hr block, paid: 4 half hr blocks) and timezone.
 6. Complete backend to remove and add mail from the inbox with the API.
 7. Attach the above to a cron that runs on the hour and loops through everyone who fits that tz, adding / removing as required.
