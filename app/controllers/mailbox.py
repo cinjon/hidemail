@@ -10,6 +10,8 @@ base_url = 'https://www.googleapis.com/gmail/v1/users'
 logger = app.flask_app.logger
 warning_invalid_credentials = ['Invalid Credentials']
 
+is_batch_requests = False # toggle when you complete the batching
+
 def get_headers(inbox, content_type=None):
     headers = {'Authorization': 'Bearer {0}'.format(inbox.google_access_token)}
     if content_type:
@@ -42,18 +44,43 @@ def _get_thread_ids_from_label(inbox, label):
         logger.debug('Error in getting thread ids for %s from label %s: %s' % (inbox.email, label, e))
         return []
 
+def do_batch_requests(inbox, threads, payload):
+    headers = get_headers(inbox)
+    thread_urls = ['/gmail/v1/users/%s/threads/%s/modify?key=%s' % (inbox.email, thread, api_key) for thread in threads]
+    count = 0
+    while count < len(thread_urls):
+        batch_request(thread_urls[count:count+100], payload, headers)
+        count += 100
+
 def modify_threads(inbox, addLabel, removeLabel):
-    headers = get_headers(inbox, content_type='application/json')
     payload = dict(removeLabelIds=[removeLabel], addLabelIds=[addLabel])
-    thread_ids = _get_thread_ids_from_label(inbox, removeLabel)
-    for thread_id in thread_ids:
-        url = base_url + '/%s/threads/%s/modify?key=%s' % (inbox.email, thread_id, api_key)
-        try:
-            r = requests.post(url, data=json.dumps(payload), headers=headers)
-            if r.status_code != 200:
-                return False
-        except Exception, e:
-            return False
+    threads = _get_thread_ids_from_label(inbox, removeLabel)
+
+    if is_batch_requests:
+        return do_batch_requests(inbox, threads, payload)
+    else:
+        headers = get_headers(inbox, content_type='application/json')
+        payload = json.dumps(payload)
+        fails = []
+        for thread in threads:
+            try:
+                url = base_url + '/%s/threads/%s/modify?key=%s' % (inbox.email, thread, api_key)
+                r = requests.post(url, data=payload, headers=headers)
+                if r.status_code != 200:
+                    logger.debug('status code %d for url %s' % (r.status_code, url))
+                    fails.append(url)
+            except Exception, e:
+                logger.debug('failed %s with error %s' % (url, e))
+                fails.append(url)
+        return fails
+
+def batch_request(urls, payload, headers):
+    r = requests.post('https://www.googleapis.com',
+                      files={num:(url, json.dumps(payload), 'application/json', headers) for num, url in enumerate(urls)})
+    logger.debug(r.text)
+    logger.debug(r.status_code)
+    if r.status_code != 200:
+        return False
     return True
 
 def hide_all_mail(inbox):
