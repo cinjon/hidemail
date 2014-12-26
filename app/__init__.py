@@ -14,5 +14,5 @@ db = SQLAlchemy(flask_app)
 Mobility(flask_app)
 
 import models
-import controllers
 import queue
+import controllers

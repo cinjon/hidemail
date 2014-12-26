@@ -1,7 +1,5 @@
+import app
 from app import db
-from app import utility
-from app import config
-from app import flask_app as fapp
 import random
 import os
 import datetime
@@ -24,12 +22,13 @@ class Inbox(db.Model):
     custom_label_id = db.Column(db.String(25))
     last_timezone_adj_time = db.Column(db.DateTime)
     last_timeblock_adj_time = db.Column(db.DateTime)
+    last_checked_time = db.Column(db.DateTime)
 
     def __init__(self, email=None, password=None, name=None, google_id=None, google_access_token=None, google_refresh_token=None, custom_label_name=None, custom_label_id=None, google_access_token_expiration=None):
         self.email = None
         if email:
             self.email = email.lower()
-        self.creation_time = utility.get_time()
+        self.creation_time = app.utility.get_time()
         self.password = self.set_password(password)
         self.name = name
         self.google_id = google_id
@@ -40,6 +39,32 @@ class Inbox(db.Model):
         self.custom_label_id = custom_label_id
         self.last_timezone_adj_time = None
         self.last_timeblock_adj_time = None
+        self.last_checked_time = None
+
+    def runWorker(self):
+        logger.debug('running worker in inbox %s' % self.email)
+        now = app.utility.get_time()
+        timezone = Timezone.query.get(timezone_id)
+        if not timezone or timezone.offset == None:
+            logger.debug('There is no timezone for inbox %s.' % self.email)
+            return
+
+        curr_user_time = now + datetime.timedelta(minutes=timezone.offset)
+        periods = self.get_timeblock_periods()
+        logger.debug(periods)
+        logger.debug(curr_user_time)
+        if self.is_show_mail(curr_user_time, periods):
+            logger.debug('is show mail')
+            app.controllers.mailbox.show_all_mail(self)
+        else:
+            logger.debug('is hide mail')
+            app.controllers.mailbox.hide_all_mail(self)
+
+    @staticmethod
+    def is_show_mail(curr_user_time, periods):
+        # this is going to fire all the time in the user's block.
+        # not ideal. should make it so that we aren't doing that.
+        return any([period['start'] - datetime.timedelta(minutes=app.queue.queues.warmingTime) <= curr_user_time and curr_user_time < period['end'] for period in periods])
 
     def clear_access_tokens(self):
         self.google_access_token = None
@@ -78,6 +103,11 @@ class Inbox(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password, password)
 
+    def set_last_checked_time(self, time=None, commit=True):
+        self.last_checked_time = time or app.utility.get_time()
+        if commit:
+            db.session.commit()
+
     def set_timezone(self, timezone=None, offset=None, commit=True):
         if not timezone:
             timezone = get_or_create_timezone(offset)
@@ -91,9 +121,18 @@ class Inbox(db.Model):
     def get_timeblocks(self):
         return self.timeblocks.order_by(desc(Timeblock.creation_time)).limit(2)
 
+    def get_timeblock_periods(self):
+        ret = []
+        for start, end in sorted([(tb.start_time, tb.start_time + tb.length) for tb in self.get_timeblocks()], key=lambda k:k[0]):
+            if not ret or start != ret[-1]['end']:
+                ret.append({'start':start, 'end':end})
+            elif start == ret[-1]['end']:
+                ret[-1]['end'] = end
+        return ret
+
     @staticmethod
     def is_time_adjust_helper(time):
-        now = utility.get_time()
+        now = app.utility.get_time()
         return not time or _is_out_of_range(time, now - datetime.timedelta(2), now - datetime.timedelta(0, 600))
 
     def is_tz_adjust(self):
@@ -125,7 +164,7 @@ class Timeblock(db.Model):
     def __init__(self, length, start_time):
         self.length = length
         self.start_time = start_time
-        self.creation_time = utility.get_time()
+        self.creation_time = app.utility.get_time()
 
     def serialize(self):
         return {'start':self.start_time, 'length':self.length}
