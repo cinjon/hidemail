@@ -33,12 +33,12 @@ def _get_thread_ids_from_label(inbox, label):
             return []
         result = json.loads(r.text)
         while 'nextPageToken' in result:
-            thread_ids.extend([t['id'] for t in result['threads']])
+            thread_ids.extend([t['id'] for t in result.get('threads', [])])
             r = request.get('&'.join([url, 'pageToken=%s' % result['nextPageToken']]))
             if int(r.status_code) != 200:
                 return thread_ids
             result = json.loads(r.text)
-        thread_ids.extend([t['id'] for t in result['threads']])
+        thread_ids.extend([t['id'] for t in result.get('threads', [])])
         return thread_ids
     except Exception, e:
         logger.debug('Error in getting thread ids for %s from label %s: %s' % (inbox.email, label, e))
@@ -53,8 +53,13 @@ def do_batch_requests(inbox, threads, payload):
         count += 100
 
 def modify_threads(inbox, addLabel, removeLabel):
+    if not addLabel or not removeLabel:
+        logger.debug('Threads are not complete for %s. Not modifying.' % inbox.email)
+        return
+    logger.debug('modifying threads: %s, %s' % (addLabel, removeLabel))
     payload = dict(removeLabelIds=[removeLabel], addLabelIds=[addLabel])
     threads = _get_thread_ids_from_label(inbox, removeLabel)
+    logger.debug(threads)
 
     if is_batch_requests:
         return do_batch_requests(inbox, threads, payload)
@@ -90,6 +95,7 @@ def hide_all_mail(inbox):
 
 def show_all_mail(inbox):
     if not is_fresh_token(inbox):
+        logger.debug('not tokennnn')
         return
     return modify_threads(inbox, 'INBOX', inbox.custom_label_id)
 
@@ -129,6 +135,7 @@ def revoke_access(inbox=None, access_token=None):
         logger.debug(r.text)
 
 def refresh_access(inbox):
+    logger.debug('refreshing access')
     url = 'https://www.googleapis.com/oauth2/v3/token'
     payload = {'client_id':app.flask_app.config['GOOGLE_ID'],
                'client_secret':app.flask_app.config['GOOGLE_SECRET'],

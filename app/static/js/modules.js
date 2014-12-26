@@ -132,7 +132,8 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
       return canSetTimeHelper($scope.user.lastTzAdj, $scope.user.currTzOffset);
     }
     $scope.canSetTimeblocks = function() {
-      return canSetTimeHelper($scope.user.lastTbAdj);
+      return true;
+//       return canSetTimeHelper($scope.user.lastTbAdj);
     }
     var canSetTimeHelper = function(time, offset) {
       var now = new Date();

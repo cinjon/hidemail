@@ -145,12 +145,18 @@ def get_time_info(email):
 @app.flask_app.route('/update-blocks', methods=['POST'])
 def update_blocks():
     payload = request.json['data']
+    logger.debug(payload)
     inbox = app.models.Inbox.query.filter_by(email=payload['email']).first()
     if not inbox:
         return jsonify(success=False)
     for block in payload['timeblocks']:
         inbox.set_timeblock(int(block['start']), int(block['length']), commit=False)
-    inbox.last_timeblock_adj_time = app.utility.get_time()
+
+    now = app.utility.get_time()
+    inbox.last_timeblock_adj_time = now
+    if not inbox.last_checked_time and inbox.is_complete():
+        inbox.last_checked_time = now
+
     app.db.session.commit()
     return jsonify(success=True, user=inbox.serialize())
 
@@ -161,7 +167,12 @@ def update_timezone():
     if not inbox:
         return jsonify(success=False)
     inbox.set_timezone(offset=int(payload['tz']), commit=False)
-    inbox.last_timezone_adj_time = app.utility.get_time()
+
+    now = app.utility.get_time()
+    inbox.last_timezone_adj_time = now
+    if not inbox.last_checked_time and inbox.is_complete():
+        inbox.last_checked_time = now
+
     app.db.session.commit()
     return jsonify(success=True, user=inbox.serialize())
 

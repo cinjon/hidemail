@@ -6,6 +6,16 @@ import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import desc
 
+logger = app.flask_app.logger
+
+def manage_inbox_queue(obj):
+    if isinstance(obj, tuple):
+        if obj[0] == 'inbox':
+            obj = Inbox.query.filter_by(email=obj[1]).first()
+        else:
+            return
+    obj.runWorker()
+
 class Inbox(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timeblocks = db.relationship('Timeblock', backref='inbox', lazy='dynamic')
@@ -44,15 +54,9 @@ class Inbox(db.Model):
     def runWorker(self):
         logger.debug('running worker in inbox %s' % self.email)
         now = app.utility.get_time()
-        timezone = Timezone.query.get(timezone_id)
-        if not timezone or timezone.offset == None:
-            logger.debug('There is no timezone for inbox %s.' % self.email)
-            return
-
-        curr_user_time = now + datetime.timedelta(minutes=timezone.offset)
+        timezone = Timezone.query.get(self.timezone_id)
+        curr_user_time = now - datetime.timedelta(minutes=timezone.offset)
         periods = self.get_timeblock_periods()
-        logger.debug(periods)
-        logger.debug(curr_user_time)
         if self.is_show_mail(curr_user_time, periods):
             logger.debug('is show mail')
             app.controllers.mailbox.show_all_mail(self)
@@ -61,10 +65,14 @@ class Inbox(db.Model):
             app.controllers.mailbox.hide_all_mail(self)
 
     @staticmethod
+    def is_complete():
+        return inbox.timeblocks.count() == 2 and Timezone.query.get(inbox.timezone_id)
+
+    @staticmethod
     def is_show_mail(curr_user_time, periods):
         # this is going to fire all the time in the user's block.
         # not ideal. should make it so that we aren't doing that.
-        return any([period['start'] - datetime.timedelta(minutes=app.queue.queues.warmingTime) <= curr_user_time and curr_user_time < period['end'] for period in periods])
+        return any([mins_to_datetime(period['start']) - datetime.timedelta(minutes=app.queue.queues.warmingTime) <= curr_user_time and curr_user_time < mins_to_datetime(period['end']) for period in periods])
 
     def clear_access_tokens(self):
         self.google_access_token = None
@@ -181,11 +189,9 @@ class Timezone(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     inboxes = db.relationship('Inbox', backref='timezone', lazy='dynamic')
     offset = db.Column(db.Integer) # in minutes
-    # identifier = db.Column(db.Text)
 
-    def __init__(self, offset):# , identifier):
+    def __init__(self, offset):
         self.offset = offset
-        # self.identifier = identifier
 
     def add_inbox(self, inbox):
         self.inboxes.append(inbox)
@@ -211,3 +217,8 @@ def get_inboxes_from_offset(offset):
     if timezone:
         return timezone.get_inboxes()
     return None
+
+def mins_to_datetime(minutes):
+    """ Minutes is the time since midnight. We want to return a datetime of what that is today. For example, 120 -> 2am today."""
+    now = app.utility.get_time()
+    return datetime.datetime(now.year, now.month, now.day, int(minutes / 60))

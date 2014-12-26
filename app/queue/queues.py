@@ -6,6 +6,7 @@ import os
 import redis
 from rq import Worker, Queue as rqQueue, Connection
 from Queue import Queue
+from time import sleep
 
 """
 The plan:
@@ -35,44 +36,43 @@ The plan:
 warmingTime = 120 # seconds
 checkedPeriod = 60 # seconds
 maxQueueTime = 10 # seconds
+iqmWaitSeconds  = 3
 logger = app.flask_app.logger
-
-def manage_inbox_queue(obj):
-    obj.runWorker()
 
 class InboxQueueManager(object):
     last_run_time = None
-
-    @classmethod
-    def __init__(cls):
-        logger.debug('starting IQM')
-        cls.get_queue().enqueue(manage_inbox_queue, cls)
 
     @classmethod
     def get_queue(cls):
         return InboxQueue().get_queue()
 
     @classmethod
+    def enqueue(cls, data=None):
+        if not data:
+            data = cls
+        cls.get_queue().enqueue(app.models.manage_inbox_queue, data)
+
+    @classmethod
     def runWorker(cls):
-        logger.debug('running iqm')
+        sleep(iqmWaitSeconds)
         queue = cls.get_queue()
         now = app.utility.get_time()
-        if last_run_time and last_run_time > now - datetime.timedelta(seconds=60):
-            logger.debug('not running, enqueue again')
-            queue.enqueue(manage_inbox_queue, cls)
+        if cls.last_run_time and cls.last_run_time > now - datetime.timedelta(seconds=60):
+            logger.debug('queing InboxQueue')
+            cls.enqueue()
             return
 
-        logger.debug('yes running')
         last_checked_param = now - datetime.timedelta(0, checkedPeriod)
-        for inbox in app.models.Inbox.query.filter_by(app.models.Inbox.last_checked_time < last_checked_param):
-            logger.debug('doing inbox %s' % inbox.email)
+        for inbox in app.models.Inbox.query.filter(app.models.Inbox.last_checked_time < last_checked_param):
+            logger.debug('queueing inbox %s' % inbox.email)
             inbox.set_last_checked_time(now)
-            queue.enqueue(manage_inbox_queue, inbox)
-        queue.enqueue(manage_inbox_queue, cls)
+            cls.enqueue(('inbox', inbox.email))
+        cls.enqueue()
         cls.last_run_time = now
+IQM = InboxQueueManager()
 
 class InboxQueue(object):
-    listen = ['high', 'default', 'low']
+    listen = ['high', 'default']
     conn = redis.from_url(app.config.REDIS_URL)
 
     @classmethod
@@ -83,9 +83,9 @@ class InboxQueue(object):
     def run(cls):
         with Connection(cls.conn):
             worker = Worker(map(rqQueue, cls.listen))
+            IQM.enqueue()
             worker.work()
+IQ = InboxQueue()
 
 if __name__ == '__main__':
-    IQ  = InboxQueue()
     IQ.run()
-    IQM = InboxQueueManager()
