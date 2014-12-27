@@ -2,42 +2,22 @@
 
 var lsKey = 'BatchMail-user';
 
-angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-loading-bar', 'satellizer'])
-  .controller('main', function($scope, $http, $auth, LocalStorage) {
-    $scope.getUser = function(callback) {
-      var isSupported = LocalStorage.isSupported()
-      if (!isSupported || !LocalStorage.get(lsKey)) {
-        var userToken = $auth.getToken()
-        if (userToken) {
-          $http.get('/api/user-from-token/' + userToken).then(function(response) {
-            var data = response.data;
-            if (data.success == true) {
-              if (data.user) {
-                callback(data.user);
-                LocalStorage.set(lsKey, data.user);
-              } else if (data.token == false) {
-                $auth.logout()
-              }
-            }
-          })
-        }
-      } else if (isSupported) {
-        var user = LocalStorage.get(lsKey)
-        if (user) {
-          callback(user);
-        }
-      }
-    }
-  })
-  .controller('about', function($scope) {
+angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
+  .controller('navBar', function($scope, $http, $auth, LocalStorage) {
+    getUser(LocalStorage, $http, $auth, function(user) {
+      $scope.user = user;
+    });
 
-  })
-  .controller('home', function($scope, $auth, Post, LocalStorage) {
-    if (!$scope.user) {
-      $scope.$parent.getUser(function(user) {
-        $scope.user = user;
-      })
-    }
+    $scope.$watch('user', function(newVal) {
+      if (newVal) {
+        $scope.userWelcome = newVal.name.split(' ')[0]
+        if (!$scope.userWelcome) {
+          $scope.userWelcome = 'Welcome';
+        }
+      } else {
+        $scope.userWelcome = "Get Started"
+      }
+    })
 
     $scope.logout = function() {
       $scope.user = null;
@@ -46,7 +26,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
     }
 
     $scope.oauth = function() {
-      $auth.authenticate('google', {'state':{'tzOffset':new Date().getTimezoneOffset()}}).then(function(response) {
+      $auth.authenticate('google', {'state':{'tzOffset':getTzOffset()}}).then(function(response) {
         if (response.data.success) {
           $scope.user = response.data.user;
           LocalStorage.set(lsKey, $scope.user)
@@ -56,16 +36,35 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
       })
     }
   })
-  .controller('profile', function($scope) {
-    /*
-       Get the timeblock info for the user and put it in here.
-       Load up a time adjuster.
-    */
+  .controller('home', function($scope, $http, $auth, $location, LocalStorage) {
+//     getUser(LocalStorage, $http, $auth, function(user) {
+//       if (user) {
+//         $location.path('/me'); //TODO: send the completed user with it
+//       }
+//     });
+
+    $scope.introductions = [ //This should def be more playful. The hamster.
+      "We believe that interruptions are the bane of good work.",
+      "We believe that you should have command over them.",
+    ]
   })
-  .controller('timeblocks', function($scope, $http, Post, $timeout) {
-    $scope.$parent.getUser(function(user) {
+  .controller('profile', function($scope, $http, Post, $timeout, $auth, LocalStorage) {
+    $scope.introductions = [
+      "Clicking the clock sets your timezone. Selecting from the dropdown changes your email periods.",
+      "You can change periods every three days and the timezone when you're somewhere new."
+    ]
+
+    $scope.clock = Date.now()
+    $scope.tickInterval = 1000
+    var tick = function() {
+      $scope.clock = Date.now()
+      $timeout(tick, $scope.tickInterval);
+    }
+    $timeout(tick, $scope.tickInterval);
+
+    getUser(LocalStorage, $http, $auth, function(user) {
       if (!user) {
-        $location.path('/')
+        $location.path('/') //TODO: send the null user with it.
       } else {
         $scope.user = user;
         $http.get('/api/get-time-info/' + user.email).then(function(response) {
@@ -77,7 +76,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
           }
         })
       }
-    })
+    });
 
     var setUser = function(user) {
       $scope.user = user;
@@ -92,11 +91,11 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
 
     var setBlocks = function(user) {
       $scope.blocks = user.timeblocks.map(function(block) {
-        var period = 'PM'
+        var period = 'pm'
         var length = block.length
         var hour = parseInt(block.start)/60
         if (hour < 12) {
-          period = 'AM'
+          period = 'am'
         }
         if (hour > 12) {
           hour = hour - 12;
@@ -110,7 +109,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
     }
 
     $scope.setTimezone = function() {
-      var tzOffset = (new Date()).getTimezoneOffset()
+      var tzOffset = getTzOffset();
       Post.postTimezone($scope.user.email, tzOffset).then(function(response) {
         var data = response.data;
         if (data.success) {
@@ -121,49 +120,49 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
       })
     }
 
-    $scope.getSetTimezoneDesc = function() {
-      if ($scope.canSetTimezone()) {
-        return "Set to current timezone:";
+    $scope.timezoneOffset = function() {
+      if (!$scope.user.lastTzAdj || $scope.canSetTimezone()) {
+        return offsetString(-1 * getTzOffset() / 60);
       } else {
-        return "Timezone currently set to:";
+        return offsetString(-1 * $scope.user.currTzOffset / 60);
       }
     }
+    var offsetString = function(offset) {
+      if (offset >= 0) {
+        return "+" + offset;
+      } else {
+        return "-" + -1*offset;
+      }
+    }
+
+    $scope.getTimezoneDesc = function() {
+      if (!$scope.user.lastTzAdj) {
+        return "Set your timezone to:"
+      } else if ($scope.canSetTimezone()) {
+        return "Change timezone to:"
+      } else {
+        return "Timezone set to:"
+      }
+    }
+
     $scope.canSetTimezone = function() { //This gets called every single time the clock ticks
-      return canSetTimeHelper($scope.user.lastTzAdj, $scope.user.currTzOffset);
+      return !$scope.user.lastTzAdj || $scope.user.currTzOffset != getTzOffset();
     }
     $scope.canSetTimeblocks = function() {
-      return true;
-//       return canSetTimeHelper($scope.user.lastTbAdj);
-    }
-    var canSetTimeHelper = function(time, offset) {
-      var now = new Date();
-      if (!time) {
-        return true;
-      } else if (offset && offset == now.getTimezoneOffset()) {
-        return false;
-      } else {
-        return is_out_of_range(time, new Date(time - 1000*60*60*24*2), new Date(now - 1000*60*15))
-      }
+      var time = $scope.user.lastTbAdj
+      return !time || is_out_of_range(
+        time, new Date(time - 1000*60*60*24*3), new Date(new Date() - 1000*60*15))
     }
     var is_out_of_range = function(time, beg, end) {
       return time < beg || time > end
     }
 
-    $scope.tickInterval = 1000
-    var tick = function() {
-      $scope.clock = Date.now()
-      $timeout(tick, $scope.tickInterval);
-    }
-    $timeout(tick, $scope.tickInterval);
-
     $scope.getBlockDescription = function(block) {
-      return numToWords(block.length.toString()) + ' Minute Block: '
+      return 'Period ' + ($scope.blocks.indexOf(block)+1) + ' (' + block.length + ' Minutes): '
     }
 
     $scope.getAvailableTimes = function(blockTime) {
-      var ret = allTimes.filter(function(time) { return $scope.times.indexOf(time) == -1 })
-      ret.unshift(blockTime);
-      return ret;
+      return allTimes.filter(function(time) { return time == blockTime || $scope.times.indexOf(time) == -1 })
     }
 
     $scope.updateBlocks = function() {
@@ -203,18 +202,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
 	  templateUrl: '/static/partials/home.html',
           controller: 'home'
 	})
-        .when('/login', {
-          templateUrl: '/static/partials/login.html',
-          controller: 'login'
-        })
-        .when('/signup', {
-          templateUrl: '/static/partials/signup.html',
-          controller: 'signup'
-        })
-        .when('/about', {
-          templateUrl: '/static/partials/about.html',
-          controller: 'about'
-        })
         .when('/me', {
           templateUrl: '/static/partials/profile.html',
           controller: 'profile',
@@ -226,10 +213,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
             }
           }
         })
-        .when('/timeblocks', {
-          templateUrl: '/static/partials/timeblocks.html',
-          controller: 'timeblocks'
-        })
 	.otherwise({
 	  redirectTo: '/'
 	});
@@ -240,7 +223,38 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'angular-l
     }
   ]);
 
-function redirectIfNotArgs(params, $location) {
+var getUser = function(LocalStorage, http, auth, callback) {
+  var isSupported = LocalStorage.isSupported()
+  if (!isSupported || !LocalStorage.get(lsKey)) {
+    if (userToken) {
+      var userToken = $auth.getToken()
+      http.get('/api/user-from-token/' + userToken).then(function(response) {
+        var data = response.data;
+        if (data.success == true) {
+          if (data.user) {
+            if (callback) {
+              callback(data.user);
+            }
+            LocalStorage.set(lsKey, data.user);
+          } else if (data.token == false) {
+            auth.logout()
+          }
+        }
+      })
+    }
+  } else if (isSupported) {
+    var user = LocalStorage.get(lsKey)
+    if (user && callback) {
+      callback(user);
+    }
+  }
+}
+
+var getTzOffset = function() {
+  return (new Date()).getTimezoneOffset()
+}
+
+var redirectIfNotArgs = function(params, $location) {
   for (var param in params) {
     if (!params[param] || params[param] == '') {
       $location.path('/')
@@ -254,8 +268,24 @@ var numToWords = function(num) {
   }
 }
 
-var allHours = [12].concat(Array.apply(null, Array(11)).map(function (_, i) { return i+1 }))
-var allTimes = allHours.map(function(hour) { return hour.toString() + ' AM' }).concat(allHours.map(function(hour) { return hour.toString() + ' PM' }))
+function getAllTimes() {
+  var allHours = [12].concat(Array.apply(null, Array(11)).map(function (_, i) { return i+1 }));
+  var temp = allHours.map(function(hour) { return hour.toString() + ' am' }).concat(allHours.map(function(hour) { return hour.toString() + ' pm' }));
+  var ret = [];
+  for (var index = 0; index < temp.length; index++) {
+    var firstValue = temp[index];
+    var secondIndex = index + 1;
+    if (secondIndex == temp.length) {
+      secondIndex = 0;
+    }
+    var secondValue = temp[secondIndex];
+    ret.push(firstValue + " - " + secondValue);
+  }
+  return ret;
+}
+// var allTimes = getAllTimes();
+var allHours = [12].concat(Array.apply(null, Array(11)).map(function (_, i) { return i+1 }));
+var allTimes = allHours.map(function(hour) { return hour.toString() + ' am' }).concat(allHours.map(function(hour) { return hour.toString() + ' pm' }));
 
 window.mobilecheck = function() {
   var check = false;

@@ -35,14 +35,12 @@ def _get_thread_ids_from_label(inbox, label):
         while 'nextPageToken' in result:
             thread_ids.extend([t['id'] for t in result.get('threads', [])])
             r = request.get('&'.join([url, 'pageToken=%s' % result['nextPageToken']]))
-            if int(r.status_code) != 200:
-                return thread_ids
             result = json.loads(r.text)
         thread_ids.extend([t['id'] for t in result.get('threads', [])])
         return thread_ids
     except Exception, e:
         logger.debug('Error in getting thread ids for %s from label %s: %s' % (inbox.email, label, e))
-        return []
+        return thread_ids
 
 def do_batch_requests(inbox, threads, payload):
     headers = get_headers(inbox)
@@ -54,30 +52,25 @@ def do_batch_requests(inbox, threads, payload):
 
 def modify_threads(inbox, addLabel, removeLabel):
     if not addLabel or not removeLabel:
-        logger.debug('Threads are not complete for %s. Not modifying.' % inbox.email)
+        logger.debug('Threads are still not complete for %s. Not modifying.' % inbox.email)
         return
-    logger.debug('modifying threads: %s, %s' % (addLabel, removeLabel))
+
     payload = dict(removeLabelIds=[removeLabel], addLabelIds=[addLabel])
     threads = _get_thread_ids_from_label(inbox, removeLabel)
-    logger.debug(threads)
 
     if is_batch_requests:
         return do_batch_requests(inbox, threads, payload)
     else:
         headers = get_headers(inbox, content_type='application/json')
         payload = json.dumps(payload)
-        fails = []
         for thread in threads:
             try:
                 url = base_url + '/%s/threads/%s/modify?key=%s' % (inbox.email, thread, api_key)
                 r = requests.post(url, data=payload, headers=headers)
                 if r.status_code != 200:
-                    logger.debug('status code %d for url %s' % (r.status_code, url))
-                    fails.append(url)
+                    logger.debug('status code %d for url %s for inbox %s' % (r.status_code, url, inbox.email))
             except Exception, e:
-                logger.debug('failed %s with error %s' % (url, e))
-                fails.append(url)
-        return fails
+                logger.debug('failed %s with error %s for inbox %s' % (url, e, inbox.email))
 
 def batch_request(urls, payload, headers):
     r = requests.post('https://www.googleapis.com',
@@ -88,16 +81,22 @@ def batch_request(urls, payload, headers):
         return False
     return True
 
-def hide_all_mail(inbox):
+def _modifying_mail_check(inbox):
     if not is_fresh_token(inbox):
-        return
-    return modify_threads(inbox, inbox.custom_label_id, 'INBOX')
+        logger.debug('We have a problem with refreshing the token for inbox %s.' % inbox.email)
+        return False
+    if not inbox.custom_label_id and not create_label(inbox):
+        logger.debug('We have a problem with generating the label for inbox %s.' % inbox.email)
+        return False
+    return True
+
+def hide_all_mail(inbox):
+    if _modifying_mail_check(inbox):
+        modify_threads(inbox, inbox.custom_label_id, 'INBOX')
 
 def show_all_mail(inbox):
-    if not is_fresh_token(inbox):
-        logger.debug('not tokennnn')
-        return
-    return modify_threads(inbox, 'INBOX', inbox.custom_label_id)
+    if _modifying_mail_check(inbox):
+        modify_threads(inbox, 'INBOX', inbox.custom_label_id)
 
 def create_label(inbox, label_name=None):
     if not is_fresh_token(inbox):

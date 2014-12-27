@@ -44,24 +44,6 @@ def parse_token(req):
     token = req.headers.get('Authorization').split()[1]
     return jwt.decode(token, config['SECRET_KEY'])
 
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not request.headers.get('Authorization'):
-            response = jsonify(message='Missing authorization header')
-            response.status_code = 401
-            return response
-
-        payload = parse_token(request)
-        if datetime.fromtimestamp(payload['exp']) < datetime.now():
-            response = jsonify(message='Token has expired')
-            response.status_code = 401
-            return response
-
-        g.inbox_id = payload['sub']
-        return f(*args, **kwargs)
-    return decorated_function
-
 @app.flask_app.route('/me')
 def profile():
     return make_response(open('app/public/template/index.html').read())
@@ -147,8 +129,9 @@ def update_blocks():
     payload = request.json['data']
     logger.debug(payload)
     inbox = app.models.Inbox.query.filter_by(email=payload['email']).first()
-    if not inbox:
+    if not inbox or not inbox.is_tb_adjust():
         return jsonify(success=False)
+
     for block in payload['timeblocks']:
         inbox.set_timeblock(int(block['start']), int(block['length']), commit=False)
 
@@ -166,6 +149,7 @@ def update_timezone():
     inbox = app.models.Inbox.query.filter_by(email=payload['email']).first()
     if not inbox:
         return jsonify(success=False)
+
     inbox.set_timezone(offset=int(payload['tz']), commit=False)
 
     now = app.utility.get_time()

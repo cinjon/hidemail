@@ -1,10 +1,16 @@
-<div class="row">
-  <h1>Hi in home</h1>
-  <div ng-if="user != null">
-    We have a user named {{user.name}}
-    <button ng-click="logout()" class="btn btn-sm">Logout</button>
+<div class="introductions">
+  <div ng-repeat="line in introductions" class="row introduction">
+    <div class="col-xs-12">
+      {{line}}
+    </div>
   </div>
-  <div ng-if="user == null">
-    <button ng-click="oauth()" class="btn btn-sm">Click to Connect</button>
+</div>
+
+<div class="introductions">
+  <div class="row introduction col-xs-offset-4">
+    BatchMail lets you select time periods to respond to your email.
+  </div>
+  <div class="row introduction col-xs-offset-4">
+    At all other times, it hides your inbox. From all devices.
   </div>
 </div>

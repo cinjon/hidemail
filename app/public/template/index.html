@@ -12,7 +12,8 @@
   <script src="/static/lib/jquery/jquery-1.11.1.min.js"></script>
   <script src="/static/lib/bootstrap/bootstrap.min.js"></script>
 
-  <script src="/static/lib/angular/angular.min.js"></script>
+<!--   <script src="/static/lib/angular/angular.min.js"></script> -->
+  <script src="/static/lib/angular/angular.js"></script>
   <script src="/static/lib/angular/angular-route.js"></script>
   <script src="/static/lib/angular/angular-resource.js"></script>
   <script src="/static/lib/loading/loading-bar.js"></script>
@@ -20,17 +21,35 @@
   <script src="/static/lib/angular-local-storage.min.js"></script>
 
   <script src="/static/js/modules.js"></script>
+  <script src="/static/js/filters.js"></script>
   <script src="/static/js/directives.js"></script>
   <script src="/static/js/services.js"></script>
 </head>
 <body>
-  <div class="overlay">
-    <div class="container page">
-      <div class="content" ng-controller="main">
-        <h1>This is an inserted script: </h1>
-        <div class="view" ng-view></div>
+  <div class="page">
+    <div class="header" class="header navbar navbar-static-top" ng-controller="navBar">
+      <div class="navbar-inner">
+        <div class="container">
+          <a class="brand" href="/">BatchMail</a>
+          <a class="connect" ng-if="user != null" ng-click="oauth()">{{userWelcome}}</a>
+          <a class="connect" ng-if="user == null" ng-click="userDropdown()">{{userWelcome}}</a>
+          <!-- Here, have a logout button and the email its associated with -->
+        </div>
       </div>
     </div>
+    <div class="content">
+      <div class="container">
+        <div class="view" ng-view>
+          <!-- partial view filled in here -->
+        </div>
+      </div>
+    </div>
+    <footer id="footer" class="footer">
+      <div class="container">
+        my name is Cinjon. you can reach me <a href="mailto:cinjon.resnick@gmail.com">here</a>.
+      </div>
+    </footer>
   </div>
 </body>
+
 </html>

@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import desc
 
 logger = app.flask_app.logger
+time_period_change = 3 # days
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple):
@@ -33,6 +34,7 @@ class Inbox(db.Model):
     last_timezone_adj_time = db.Column(db.DateTime)
     last_timeblock_adj_time = db.Column(db.DateTime)
     last_checked_time = db.Column(db.DateTime)
+    #account = db.relationship('Account', backref='inbox', lazy='dynamic')
 
     def __init__(self, email=None, password=None, name=None, google_id=None, google_access_token=None, google_refresh_token=None, custom_label_name=None, custom_label_id=None, google_access_token_expiration=None):
         self.email = None
@@ -58,10 +60,8 @@ class Inbox(db.Model):
         curr_user_time = now - datetime.timedelta(minutes=timezone.offset)
         periods = self.get_timeblock_periods()
         if self.is_show_mail(curr_user_time, periods):
-            logger.debug('is show mail')
             app.controllers.mailbox.show_all_mail(self)
         else:
-            logger.debug('is hide mail')
             app.controllers.mailbox.hide_all_mail(self)
 
     @staticmethod
@@ -72,7 +72,8 @@ class Inbox(db.Model):
     def is_show_mail(curr_user_time, periods):
         # this is going to fire all the time in the user's block.
         # not ideal. should make it so that we aren't doing that.
-        return any([mins_to_datetime(period['start']) - datetime.timedelta(minutes=app.queue.queues.warmingTime) <= curr_user_time and curr_user_time < mins_to_datetime(period['end']) for period in periods])
+        warmingTime = datetime.timedelta(minutes=app.queue.queues.warmingTime)
+        return any([mins_to_datetime(period['start']) - warmingTime <= curr_user_time and curr_user_time < mins_to_datetime(period['end']) for period in periods])
 
     def clear_access_tokens(self):
         self.google_access_token = None
@@ -138,16 +139,10 @@ class Inbox(db.Model):
                 ret[-1]['end'] = end
         return ret
 
-    @staticmethod
-    def is_time_adjust_helper(time):
-        now = app.utility.get_time()
-        return not time or _is_out_of_range(time, now - datetime.timedelta(2), now - datetime.timedelta(0, 600))
-
-    def is_tz_adjust(self):
-        return self.is_time_adjust_helper(self.last_timezone_adj_time)
-
     def is_tb_adjust(self):
-        return self.is_time_adjust_helper(self.last_timeblock_adj_time)
+        now = app.utility.get_time()
+        time = self.last_timeblock_adj_time
+        return not time or _is_out_of_range(time, now - datetime.timedelta(time_period_change), now - datetime.timedelta(0, 600))
 
     def basic_info(self):
         return {'name':self.name, 'email':self.email}
@@ -222,3 +217,20 @@ def mins_to_datetime(minutes):
     """ Minutes is the time since midnight. We want to return a datetime of what that is today. For example, 120 -> 2am today."""
     now = app.utility.get_time()
     return datetime.datetime(now.year, now.month, now.day, int(minutes / 60))
+
+account_types = {0:'inactive', 1:'free', 2:'monthly', 3:'trial'}
+class Account(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    inbox_id = db.Column(db.Integer, db.ForeignKey('inbox.id'), index=True)
+    ty = db.Column(db.Integer) # See Account Types
+    # Need other fields that Stripe will tell me.
+
+    def __init__(self, ty=None):
+        self.ty = ty or 0
+
+    def set_type(ty, commit=True):
+        self.ty = ty or self.ty
+        if commit:
+            db.session.commit()
+
+
