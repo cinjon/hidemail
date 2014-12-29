@@ -5,12 +5,15 @@ import random
 import json
 import datetime
 
+from apiclient.http import BatchHttpRequest
+
 api_key = app.flask_app.config['GOOGLE_API_KEY']
 base_url = 'https://www.googleapis.com/gmail/v1/users'
 logger = app.flask_app.logger
 warning_invalid_credentials = ['Invalid Credentials']
 
-is_batch_requests = False # toggle when you complete the batching
+is_batch_requests = True # toggle when you complete the batching
+batch_request_limit = 100 # is it really though? or is it actually a 1000?
 
 def get_headers(inbox, content_type=None):
     headers = {'Authorization': 'Bearer {0}'.format(inbox.google_access_token)}
@@ -18,73 +21,55 @@ def get_headers(inbox, content_type=None):
         headers['Content-Type'] = content_type
     return headers
 
-def is_fresh_token(inbox):
-    if datetime.datetime.now() - datetime.timedelta(0, 3) > inbox.google_access_token_expiration and not refresh_access(inbox):
-        return False
-    return True
-
 def _get_thread_ids_from_label(inbox, label):
-    headers = get_headers(inbox)
     url = base_url + '/%s/threads?labelIds=%s&key=%s' % (inbox.email, label, api_key)
     thread_ids = []
     try:
-        r = requests.get(url, headers=headers)
-        if r.status_code != 200:
-            return []
-        result = json.loads(r.text)
-        while 'nextPageToken' in result:
-            thread_ids.extend([t['id'] for t in result.get('threads', [])])
-            r = request.get('&'.join([url, 'pageToken=%s' % result['nextPageToken']]))
-            result = json.loads(r.text)
-        thread_ids.extend([t['id'] for t in result.get('threads', [])])
+        service = inbox.get_gmail_service()
+        response = service.users().threads().list(userId=inbox.email, labelIds=[label]).execute()
+        while 'nextPageToken' in response:
+            thread_ids.extend([t['id'] for t in response.get('threads', [])])
+            response = service.users().threads().list(
+                userId=inbox.email, labelIds=[label], pageToken=response['nextPageToken']).execute()
+        thread_ids.extend([t['id'] for t in response.get('threads', [])])
         return thread_ids
     except Exception, e:
         logger.debug('Error in getting thread ids for %s from label %s: %s' % (inbox.email, label, e))
         return thread_ids
 
-def do_batch_requests(inbox, threads, payload):
-    headers = get_headers(inbox)
-    thread_urls = ['/gmail/v1/users/%s/threads/%s/modify?key=%s' % (inbox.email, thread, api_key) for thread in threads]
+def do_batch_modify_threads(inbox, threads, payload):
+    def batch_callback(request_id, response, exception):
+        """In the response is: historyId, snippet, sizeEstimate, threadId, and labelIds"""
+        pass
+
+    service = inbox.get_gmail_service()
+    if not service:
+        logger.debug('no service for inbox %s' % inbox.email)
+        return
+
     count = 0
-    while count < len(thread_urls):
-        batch_request(thread_urls[count:count+100], payload, headers)
-        count += 100
+    while count < len(threads):
+        batch = BatchHttpRequest()
+        logger.debug('thread length: %d' % len(threads))
+        for thread in threads[count:count + batch_request_limit]:
+            batch.add(service.users().threads().modify(
+                userId=inbox.email, id=thread, body=payload), callback=batch_callback)
+        batch.execute()
 
 def modify_threads(inbox, addLabel, removeLabel):
     if not addLabel or not removeLabel:
         logger.debug('Threads are still not complete for %s. Not modifying.' % inbox.email)
         return
 
-    payload = dict(removeLabelIds=[removeLabel], addLabelIds=[addLabel])
     threads = _get_thread_ids_from_label(inbox, removeLabel)
-
-    if is_batch_requests:
-        return do_batch_requests(inbox, threads, payload)
-    else:
-        headers = get_headers(inbox, content_type='application/json')
-        payload = json.dumps(payload)
-        for thread in threads:
-            try:
-                url = base_url + '/%s/threads/%s/modify?key=%s' % (inbox.email, thread, api_key)
-                r = requests.post(url, data=payload, headers=headers)
-                if r.status_code != 200:
-                    logger.debug('status code %d for url %s for inbox %s' % (r.status_code, url, inbox.email))
-            except Exception, e:
-                logger.debug('failed %s with error %s for inbox %s' % (url, e, inbox.email))
-
-def batch_request(urls, payload, headers):
-    r = requests.post('https://www.googleapis.com',
-                      files={num:(url, json.dumps(payload), 'application/json', headers) for num, url in enumerate(urls)})
-    logger.debug(r.text)
-    logger.debug(r.status_code)
-    if r.status_code != 200:
-        return False
-    return True
+    do_batch_modify_threads(inbox, threads, {
+        'removeLabelIds':[removeLabel], 'addLabelIds':[addLabel]
+        })
 
 def _modifying_mail_check(inbox):
     if not is_fresh_token(inbox):
-        logger.debug('We have a problem with refreshing the token for inbox %s.' % inbox.email)
-        return False
+        logger.debug('Tried to refresh %s. Failed.' % inbox.email)
+
     if not inbox.custom_label_id and not create_label(inbox):
         logger.debug('We have a problem with generating the label for inbox %s.' % inbox.email)
         return False
@@ -98,43 +83,85 @@ def show_all_mail(inbox):
     if _modifying_mail_check(inbox):
         modify_threads(inbox, 'INBOX', inbox.custom_label_id)
 
+def get_labels(inbox):
+    if not inbox:
+        return None
+
+    try:
+        service = inbox.get_gmail_service()
+        return service.users().labels().list(userId=inbox.email).execute()
+    except Exception, e:
+        logger.debug('error in get_labels for inbox %s: %s' % (inbox.email, e))
+        return []
+
+def get_label_id(inbox, label_name=None):
+    if not label_name or not inbox:
+        return None
+
+    for label in get_labels(inbox).get('labels', []):
+        if label.get('name') == label_name:
+            return label.get('id')
+    return None
+
+def _delete_label(inbox, label_id=None):
+    if not label_id or not inbox:
+        return True
+
+    try:
+        service = inbox.get_gmail_service()
+        service.users().labels().delete(userId=inbox.email, id=label_id).execute()
+    except Exception, e:
+        logger.debug('exception deleting label %s for inbox %s: %s' % (label_id, inbox.email, e))
+        return False
+
+def delete_label(inbox, label_name=None):
+    if inbox.custom_label_id:
+        return _delete_label(inbox, inbox.custom_label_id)
+    else:
+        return _delete_label(inbox, get_label_id(inbox, label_name))
+
 def create_label(inbox, label_name=None):
     if not is_fresh_token(inbox):
         return
 
-    label_name = label_name or 'BatchMail-%s' % ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
-    headers = get_headers(inbox, content_type='application/json')
-    url = base_url + '/%s/labels?key=%s' % (inbox.email, api_key)
+    label_name = label_name or 'BatchMailBox'
+    if not delete_label(inbox, label_name):
+        logger.debug('trouble creating label %s for %s, couldnt delete it.' % (label_name, inbox.email))
+        return False
+
     payload = {
         'labelListVisibility':'labelHide',
         'messageListVisibility':'hide',
         'name':label_name
         }
     try:
-        r = requests.post(url, json.dumps(payload), headers=headers)
-        result = json.loads(r.text)
-        inbox.custom_label_name = label_name
-        inbox.custom_label_id = result.get('id')
-        app.db.session.commit()
+        service = inbox.get_gmail_service()
+        label = service.users().labels().create(userId=inbox.email, body=payload).execute()
         return True
     except Exception, e:
         logger.debug('Error in creating label for %s: %s' % (inbox.email, e))
         return False
 
 def revoke_access(inbox=None, access_token=None):
-    r = None
+    if not inbox or not is_fresh_token(inbox):
+        return False
+
     try:
-        if inbox:
-            access_token = inbox.google_access_token
+        show_all_mail(inbox)
+        access_token = inbox.google_access_token
         r = requests.get('https://accounts.google.com/o/oauth2/revoke?token=%s' % access_token)
-        if inbox:
-            inbox.clear_access_tokens()
+        inbox.clear_access_tokens()
+        inbox.inactivate()
     except Exception, e:
         logger.debug('Error in revoking access: %s' % e)
         logger.debug(r.text)
 
+def is_fresh_token(inbox):
+    if app.utility.get_time() - datetime.timedelta(seconds=3) > inbox.google_access_token_expiration and not refresh_access(inbox):
+        return False
+    return True
+
 def refresh_access(inbox):
-    logger.debug('refreshing access')
     url = 'https://www.googleapis.com/oauth2/v3/token'
     payload = {'client_id':app.flask_app.config['GOOGLE_ID'],
                'client_secret':app.flask_app.config['GOOGLE_SECRET'],
