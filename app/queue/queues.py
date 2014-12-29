@@ -34,14 +34,12 @@ The plan:
 """
 
 warmingTime = 120 # seconds
-checkedPeriod = 60 # seconds
+checkedPeriod = 20 # seconds .. 20
 maxQueueTime = 10 # seconds
-iqmWaitSeconds  = 3
+iqmWaitSeconds  = 10 # seconds .. 5
 logger = app.flask_app.logger
 
 class InboxQueueManager(object):
-    last_run_time = None
-
     @classmethod
     def get_queue(cls):
         return InboxQueue().get_queue()
@@ -57,18 +55,11 @@ class InboxQueueManager(object):
         sleep(iqmWaitSeconds)
         queue = cls.get_queue()
         now = app.utility.get_time()
-        if cls.last_run_time and cls.last_run_time > now - datetime.timedelta(seconds=60):
-            logger.debug('queing InboxQueue')
-            cls.enqueue()
-            return
-
         last_checked_param = now - datetime.timedelta(0, checkedPeriod)
-        for inbox in app.models.Inbox.query.filter(app.models.Inbox.last_checked_time < last_checked_param):
-            logger.debug('queueing inbox %s' % inbox.email)
-            inbox.set_last_checked_time(now)
-            cls.enqueue(('inbox', inbox.email))
+        for customer in app.models.Customer.query.filter(app.models.Customer.last_checked_time < last_checked_param):
+            customer.set_last_checked_time(now)
+            customer.runWorker()
         cls.enqueue()
-        cls.last_run_time = now
 IQM = InboxQueueManager()
 
 class InboxQueue(object):
