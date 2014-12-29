@@ -18,6 +18,7 @@ body {
 
 .connect {
     float:right;
+    margin-left:30px;
 }
 
 ::-webkit-input-placeholder {
@@ -105,4 +106,31 @@ body {
     width:90%;
     margin:auto;
 }
-
+.plan {
+    height:200px;
+    width:300px;
+    border:1px solid;
+    border-radius:4px;
+    border-color:#b94a48;
+    float:left;
+    margin-right:120px;
+}
+.planTitle {
+    text-align:center;
+}
+.planStripe {
+    position:relative;
+    bottom:0px;
+}
+.planDetails {
+    margin-left:30px;
+    margin-top:5px;
+    margin-bottom:5px;
+}
+.planDetail {
+    font-size:15px;
+    margin-top:5px;
+}
+.ng-invalid {
+    color: red;
+}

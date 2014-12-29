@@ -11,6 +11,7 @@
 
   <script src="/static/lib/jquery/jquery-1.11.1.min.js"></script>
   <script src="/static/lib/bootstrap/bootstrap.min.js"></script>
+  <script src="https://checkout.stripe.com/checkout.js"></script>
 
 <!--   <script src="/static/lib/angular/angular.min.js"></script> -->
   <script src="/static/lib/angular/angular.js"></script>
@@ -31,9 +32,10 @@
       <div class="navbar-inner">
         <div class="container">
           <a class="brand" href="/">BatchMail</a>
-          <a class="connect" ng-if="user != null" ng-click="oauth()">{{userWelcome}}</a>
-          <a class="connect" ng-if="user == null" ng-click="userDropdown()">{{userWelcome}}</a>
-          <!-- Here, have a logout button and the email its associated with -->
+          <a class="connect" ng-if="user == null" ng-click="oauth()">{{userWelcome}}</a>
+          <a class="connect" ng-if="user != null" ng-click="userDropdown()">{{userWelcome}}</a>
+          <a class="connect" href="/plans">Plans</a>
+          <a class="connect" ng-click="logout()">Logout</a>
         </div>
       </div>
     </div>

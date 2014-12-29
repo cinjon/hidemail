@@ -1,0 +1,12 @@
+<h3 class="planTitle">{{plan.title}}</h3>
+<ul class="planDetails">
+  <li class="planDetail" ng-repeat="line in plan.details">{{line}}</li>
+</ul>
+</div>
+<div class="planStripe" ng-if="user != null">
+  <button id="stripeButton" ng-click="buy(plan)">Purchase</button>
+</div>
+<div class="planConnect" ng-if="user == null">
+  <button id="connectButton" ng-click="oauth()">Connect</button>
+</div>
+
