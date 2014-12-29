@@ -15,6 +15,12 @@ angular.module('hidemailServices', ['ngRoute', 'ngResource', 'LocalStorageModule
           data: {'tz':tzOffset, 'email':email}
         })
       },
+      postPayment: function(token) {
+        return $http.post('/post-payment', {
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          data: {'token':token}
+        })
+      }
     }
   })
   .factory('Get', function($http) {

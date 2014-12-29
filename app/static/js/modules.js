@@ -1,6 +1,7 @@
 'use strict';
 
 var lsKey = 'BatchMail-user';
+var stripePK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
   .controller('navBar', function($scope, $http, $auth, LocalStorage) {
@@ -37,16 +38,84 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
   })
   .controller('home', function($scope, $http, $auth, $location, LocalStorage) {
-//     getUser(LocalStorage, $http, $auth, function(user) {
-//       if (user) {
-//         $location.path('/me'); //TODO: send the completed user with it
-//       }
-//     });
+    getUser(LocalStorage, $http, $auth, function(user) {
+      if (user && user.accountType && user.accountType != 'inactive') {
+        $location.path('/me')
+      } else {
+        $scope.user = user;
+      }
+    });
 
     $scope.introductions = [ //This should def be more playful. The hamster.
       "We believe that interruptions are the bane of good work.",
       "We believe that you should have command over them.",
     ]
+  })
+  .controller('plans', function($scope, $http, $auth, LocalStorage, Post) {
+    getUser(LocalStorage, $http, $auth, function(user) {
+      $scope.user = user
+    })
+
+    $scope.plans = [
+      {
+        selection:'monthly',
+        description:'Six Month Subscription', price:30,
+        url:'/static/partials/plan.html',
+        title:"Our Top Choice",
+        details:[
+          "Six Months, $5 per month.",
+          "That's a latte at Sightglass.",
+          "Or freedom from notifications."
+        ]},
+      {
+        selection:'trial',
+        description:'Six Week Trial',
+        price:15,
+        url:'/static/partials/plan.html',
+        title:"Treat Yourself",
+        details:[
+          "Six Weeks, $15.",
+          "Two beers at Monk's Kettle.",
+          "Or focus and deeper thought."
+        ]}]
+
+    var handler = StripeCheckout.configure({
+      key: stripePK,
+//       image: '/square-image.png',
+      token: function(token) {
+        token['selection'] = $scope.selection
+        Post.postPayment(token).then(function(response) {
+          if (response.success) {
+            console.log('success str')
+          } else {
+            console.log('success str')
+          }
+        });
+      }
+    });
+
+    $scope.buy = function(plan) {
+      $scope.selection = plan.selection // Because there doesn't seem to be a way to add this info to the token.
+      var description = plan.description;
+      var price = plan.price;
+      handler.open({
+        name: 'BatchMail',
+        description: description,
+        amount: price,
+        email: $scope.user.email
+      })
+    }
+
+    $scope.oauth = function() {
+      $auth.authenticate('google', {'state':{'tzOffset':getTzOffset()}}).then(function(response) {
+        if (response.data.success) {
+          $scope.user = response.data.user;
+          LocalStorage.set(lsKey, $scope.user)
+        } else {
+          console.log('failed to authenticate.');
+        }
+      })
+    }
   })
   .controller('profile', function($scope, $http, Post, $timeout, $auth, LocalStorage) {
     $scope.introductions = [
@@ -149,6 +218,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       return !$scope.user.lastTzAdj || $scope.user.currTzOffset != getTzOffset();
     }
     $scope.canSetTimeblocks = function() {
+      return true
       var time = $scope.user.lastTbAdj
       return !time || is_out_of_range(
         time, new Date(time - 1000*60*60*24*3), new Date(new Date() - 1000*60*15))
@@ -196,7 +266,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
   })
   .config([
     '$routeProvider', '$locationProvider', '$authProvider',
-    function($routeProvider, $locationProvider, $authProvider) {
+    function($routeProvider, $locationProvider, $authProvider, $window) {
       $routeProvider
 	.when('/', {
 	  templateUrl: '/static/partials/home.html',
@@ -204,14 +274,11 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 	})
         .when('/me', {
           templateUrl: '/static/partials/profile.html',
-          controller: 'profile',
-          resolve: {
-            authenticated: function($location, $auth) {
-              if (!$auth.isAuthenticated()) {
-                return $location.path('/');
-              }
-            }
-          }
+          controller: 'profile'
+        })
+        .when('/plans', {
+          templateUrl: '/static/partials/plans.html',
+          controller: 'plans'
         })
 	.otherwise({
 	  redirectTo: '/'
