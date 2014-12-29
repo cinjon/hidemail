@@ -6,19 +6,56 @@ import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import desc
 
+import httplib2
+from apiclient.discovery import build
+from oauth2client.client import Credentials
+
 logger = app.flask_app.logger
 time_period_change = 3 # days
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple):
-        if obj[0] == 'inbox':
-            obj = Inbox.query.filter_by(email=obj[1]).first()
-        else:
-            return
+        if obj[0] == 'customer':
+            obj = Customer.query.get(obj[1])
+        elif obj[0] == 'inbox':
+            obj = Inbox.query.get(obj[1])
     obj.runWorker()
+
+account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3}
+account_costs = {'inactive':0, 'free':0, 'monthly':30, 'trial':15} # at some pt switch to subscription billing
+
+class Customer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    creation_time = db.Column(db.DateTime)
+    name = db.Column(db.Text)
+    last_checked_time = db.Column(db.DateTime) # for the workers to check when they last saw an inbox
+    stripe_customer_id = db.Column(db.Integer)
+    account_type = db.Column(db.Integer) # See Account Types
+    inboxes = db.relationship('Inbox', backref='customer', lazy='dynamic')
+
+    def __init__(self, name=None, account_type=None):
+        self.creation_time = app.utility.get_time()
+        self.name = name
+        self.account_type = account_type or account_types['inactive']
+
+    def runWorker(self):
+        for inbox in self.inboxes:
+            if inbox.is_active:
+                app.queue.queues.IQ.get_queue().enqueue(manage_inbox_queue, ('inbox', inbox.id))
+
+    def set_stripe_id(self, stripe_customer_id, commit=True):
+        self.stripe_customer_id = stripe_customer_id
+        if commit:
+            db.session.commit()
+
+    def set_last_checked_time(self, time=None, commit=True):
+        self.last_checked_time = time or app.utility.get_time()
+        if commit:
+            db.session.commit()
 
 class Inbox(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), index=True)
     timeblocks = db.relationship('Timeblock', backref='inbox', lazy='dynamic')
     timezone_id = db.Column(db.Integer, db.ForeignKey('timezone.id'))
     creation_time = db.Column(db.DateTime)
@@ -29,14 +66,17 @@ class Inbox(db.Model):
     google_access_token = db.Column(db.Text)
     google_access_token_expiration = db.Column(db.DateTime)
     google_refresh_token = db.Column(db.Text)
+    google_credentials = db.Column(db.Text) # json blob
     custom_label_name = db.Column(db.String(25))
     custom_label_id = db.Column(db.String(25))
     last_timezone_adj_time = db.Column(db.DateTime)
     last_timeblock_adj_time = db.Column(db.DateTime)
-    last_checked_time = db.Column(db.DateTime)
-    #account = db.relationship('Account', backref='inbox', lazy='dynamic')
+    is_active = db.Column(db.Boolean)
 
-    def __init__(self, email=None, password=None, name=None, google_id=None, google_access_token=None, google_refresh_token=None, custom_label_name=None, custom_label_id=None, google_access_token_expiration=None):
+    def __init__(self, email=None, password=None, name=None,
+                 google_id=None, google_access_token=None, google_refresh_token=None,
+                 custom_label_name=None, custom_label_id=None,
+                 google_access_token_expiration=None, google_credentials=None):
         self.email = None
         if email:
             self.email = email.lower()
@@ -47,43 +87,54 @@ class Inbox(db.Model):
         self.google_access_token = google_access_token
         self.google_access_token_expiration = google_access_token_expiration
         self.google_refresh_token = google_refresh_token
+        self.google_credentials = google_credentials
         self.custom_label_name = custom_label_name
         self.custom_label_id = custom_label_id
         self.last_timezone_adj_time = None
         self.last_timeblock_adj_time = None
-        self.last_checked_time = None
+        self.is_active = True
 
     def runWorker(self):
-        logger.debug('running worker in inbox %s' % self.email)
-        now = app.utility.get_time()
-        timezone = Timezone.query.get(self.timezone_id)
-        curr_user_time = now - datetime.timedelta(minutes=timezone.offset)
-        periods = self.get_timeblock_periods()
-        if self.is_show_mail(curr_user_time, periods):
+        if self.is_show_mail():
             app.controllers.mailbox.show_all_mail(self)
         else:
             app.controllers.mailbox.hide_all_mail(self)
 
-    @staticmethod
-    def is_complete():
-        return inbox.timeblocks.count() == 2 and Timezone.query.get(inbox.timezone_id)
+    def is_complete(self):
+        return self.timeblocks.count() == 2 and self.timezone
 
-    @staticmethod
-    def is_show_mail(curr_user_time, periods):
+    def is_show_mail(self):
         # this is going to fire all the time in the user's block.
         # not ideal. should make it so that we aren't doing that.
-        warmingTime = datetime.timedelta(minutes=app.queue.queues.warmingTime)
+        now = app.utility.get_time()
+        curr_user_time = now - datetime.timedelta(minutes=self.timezone.offset)
+        periods = self.get_timeblock_periods()
+        warmingTime = datetime.timedelta(seconds=app.queue.queues.warmingTime)
         return any([mins_to_datetime(period['start']) - warmingTime <= curr_user_time and curr_user_time < mins_to_datetime(period['end']) for period in periods])
+
+    def get_gmail_service(self):
+        if not self.google_credentials:
+            return None
+
+        credentials = Credentials.new_from_json(self.google_credentials)
+        http = credentials.authorize(httplib2.Http())
+        return build('gmail', 'v1', http=http)
 
     def clear_access_tokens(self):
         self.google_access_token = None
         self.google_refresh_token = None
         db.session.commit()
 
-    def setup_tz_on_arrival(self, tz_offset, commit=False):
-        self.set_timezone(offset=tz_offset, commit=False)
-        if commit:
-            db.session.commit()
+    def inactivate(self):
+        self.is_active = False
+        db.session.commit()
+
+    def activate(self):
+        self.is_active = True
+        db.session.commit()
+
+    def setup_tz_on_arrival(self, tz_offset, commit=True):
+        self.set_timezone(offset=tz_offset, commit=commit)
 
     def setup_tb_on_arrival(self, commit=True):
         self.set_timeblock(start_time=8*60, length=60, commit=False)
@@ -102,20 +153,16 @@ class Inbox(db.Model):
             return None
         return generate_password_hash(password)
 
-    def set_google_access_token(self, access_token, expires_in, refresh_token=None, commit=True):
-        self.google_access_token = access_token
+    def set_google_access_token(self, access_token, expires_in, refresh_token=None, credentials=None, commit=True):
+        self.google_access_token = access_token or self.google_access_token
         self.google_refresh_token = refresh_token or self.google_refresh_token
-        self.google_access_token_expiration = datetime.datetime.now() + datetime.timedelta(0, int(expires_in))
+        self.google_access_token_expiration = app.controllers.application.get_token_expiry(expires_in)
+        self.google_credentials = credentials or app.controllers.application.get_google_credentials(self.google_access_token, self.google_refresh_token, expires_in)
         if commit:
             db.session.commit()
 
     def check_password(self, password):
         return check_password_hash(self.password, password)
-
-    def set_last_checked_time(self, time=None, commit=True):
-        self.last_checked_time = time or app.utility.get_time()
-        if commit:
-            db.session.commit()
 
     def set_timezone(self, timezone=None, offset=None, commit=True):
         if not timezone:
@@ -140,15 +187,16 @@ class Inbox(db.Model):
         return ret
 
     def is_tb_adjust(self):
-        now = app.utility.get_time()
-        time = self.last_timeblock_adj_time
-        return not time or _is_out_of_range(time, now - datetime.timedelta(time_period_change), now - datetime.timedelta(0, 600))
+        return True
+#         now = app.utility.get_time()
+#         time = self.last_timeblock_adj_time
+#         return not time or _is_out_of_range(time, now - datetime.timedelta(time_period_change), now - datetime.timedelta(0, 600))
 
     def basic_info(self):
         return {'name':self.name, 'email':self.email}
 
     def serialize(self):
-        tz = Timezone.query.get(self.timezone_id).offset
+        tz = self.timezone.offset
         return {'name':self.name, 'email':self.email,
                 'lastTzAdj':self.last_timezone_adj_time, 'lastTbAdj':self.last_timeblock_adj_time,
                 'currTzOffset':tz, 'timeblocks':sorted([tb.serialize() for tb in self.get_timeblocks()], key=lambda k:k['start'])
@@ -218,19 +266,5 @@ def mins_to_datetime(minutes):
     now = app.utility.get_time()
     return datetime.datetime(now.year, now.month, now.day, int(minutes / 60))
 
-account_types = {0:'inactive', 1:'free', 2:'monthly', 3:'trial'}
-class Account(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    inbox_id = db.Column(db.Integer, db.ForeignKey('inbox.id'), index=True)
-    ty = db.Column(db.Integer) # See Account Types
-    # Need other fields that Stripe will tell me.
-
-    def __init__(self, ty=None):
-        self.ty = ty or 0
-
-    def set_type(ty, commit=True):
-        self.ty = ty or self.ty
-        if commit:
-            db.session.commit()
 
 
