@@ -31,7 +31,16 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     $scope.oauth = function() {
-      $auth.authenticate('google', {'state':{'tzOffset':getTzOffset()}}).then(function(response) {
+      var state = {};
+      if ($scope.user) {
+        state['customer'] = $scope.user.customer_id;
+        state['tzOffset'] = $scope.user.currTzOffset;
+      } else {
+        state['customer'] = null;
+        state['tzOffset'] = getTzOffset();
+      }
+
+      $auth.authenticate('google', {'state':state}).then(function(response) {
         if (response.data.success) {
           $scope.user = response.data.user;
           LocalStorage.set(lsKey, $scope.user)
@@ -87,6 +96,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 //       image: '/square-image.png',
       token: function(token) {
         token['selection'] = $scope.selection
+        token['customer_id'] = $scope.user.customer_id
         Post.postPayment(token).then(function(response) {
           if (response.success) {
             console.log('success str')
@@ -98,25 +108,14 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     });
 
     $scope.buy = function(plan) {
-      $scope.selection = plan.selection // Because there doesn't seem to be a way to add this info to the token.
+      $scope.selection = plan.selection // Is there a way to add this info to the token?
       var description = plan.description;
       var price = plan.price;
       handler.open({
-        name: 'BatchMail',
+        name: 'KaizInbox',
         description: description,
         amount: price,
-        email: $scope.user.email
-      })
-    }
-
-    $scope.oauth = function() {
-      $auth.authenticate('google', {'state':{'tzOffset':getTzOffset()}}).then(function(response) {
-        if (response.data.success) {
-          $scope.user = response.data.user;
-          LocalStorage.set(lsKey, $scope.user)
-        } else {
-          console.log('failed to authenticate.');
-        }
+        email: $scope.user.inboxes[0].email
       })
     }
   })
@@ -139,8 +138,9 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         $location.path('/') //TODO: send the null user with it.
       } else {
         $scope.user = user;
-        $http.get('/api/get-time-info/' + user.email).then(function(response) {
+        $http.get('/api/get-time-info/' + user.customer_id).then(function(response) {
           var data = response.data;
+          console.log(response)
           if (data.success) {
             setUser(data.user);
           } else {
@@ -182,7 +182,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     $scope.setTimezone = function() {
       var tzOffset = getTzOffset();
-      Post.postTimezone($scope.user.email, tzOffset).then(function(response) {
+      Post.postTimezone($scope.user.customer_id, tzOffset).then(function(response) {
         var data = response.data;
         if (data.success) {
           setUser(data.user);
@@ -218,6 +218,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     $scope.canSetTimezone = function() { //This gets called every single time the clock ticks
+      return true;
       return !$scope.user.lastTzAdj || $scope.user.currTzOffset != getTzOffset();
     }
     $scope.canSetTimeblocks = function() {
@@ -259,8 +260,9 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         return {length:block.length, start:start_time};
       })
 
-      Post.postBlocks($scope.user.email, timeblocks).then(function(response) {
+      Post.postBlocks($scope.user.customer_id, timeblocks).then(function(response) {
         var data = response.data;
+        console.log(data)
         if (data.success) {
           setUser(data.user);
         } else {

@@ -3,16 +3,16 @@
 angular.module('hidemailServices', ['ngRoute', 'ngResource', 'LocalStorageModule'])
   .factory('Post', function($http) {
     return {
-      postBlocks: function(email, blocks) {
+      postBlocks: function(customer_id, blocks) {
         return $http.post('/update-blocks', {
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          data: {'timeblocks':blocks, 'email':email}
+          data: {'timeblocks':blocks, 'customer_id':customer_id}
         })
       },
-      postTimezone: function(email, tzOffset) {
+      postTimezone: function(customer_id, tzOffset) {
         return $http.post('/update-timezone', {
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          data: {'tz':tzOffset, 'email':email}
+          data: {'tz':tzOffset, 'customer_id':customer_id}
         })
       },
       postPayment: function(token) {

@@ -39,7 +39,6 @@ def do_batch_modify_threads(inbox, threads, payload):
     count = 0
     while count < len(threads):
         batch = BatchHttpRequest()
-        logger.debug('thread length: %d' % len(threads))
         for thread in threads[count:count + batch_request_limit]:
             batch.add(
                 service.users().threads().modify(
@@ -50,7 +49,6 @@ def do_batch_modify_threads(inbox, threads, payload):
 
 def modify_threads(inbox, addLabel, removeLabel):
     if not addLabel or not removeLabel:
-        logger.debug('Threads are still not complete for %s. Not modifying.' % inbox.email)
         return
 
     threads = _get_thread_ids_from_label(inbox, removeLabel)
@@ -94,7 +92,9 @@ def _delete_label(inbox, label_id=None):
         return True
 
     try:
-        inbox.get_gmail_service().users().labels().delete(userId=inbox.email, id=label_id).execute()
+        inbox.get_gmail_service().users().labels().delete(
+            userId=inbox.email, id=label_id).execute()
+        return True
     except Exception, e:
         logger.debug('exception deleting label %s for inbox %s: %s' % (label_id, inbox.email, e))
         return False
@@ -109,7 +109,7 @@ def create_label(inbox, label_name=None):
     if not is_fresh_token(inbox):
         return
 
-    label_name = label_name or 'BatchMailBox'
+    label_name = label_name or 'KaizinBox'
     if not delete_label(inbox, label_name):
         logger.debug('trouble creating label %s for %s, couldnt delete it.' % (label_name, inbox.email))
         return False
@@ -121,6 +121,9 @@ def create_label(inbox, label_name=None):
         }
     try:
         label = inbox.get_gmail_service().users().labels().create(userId=inbox.email, body=payload).execute()
+        inbox.custom_label_name = label['name']
+        inbox.custom_label_id   = label['id']
+        app.db.session.commit()
         return True
     except Exception, e:
         logger.debug('Error in creating label for %s: %s' % (inbox.email, e))
@@ -131,7 +134,7 @@ def revoke_access(inbox=None, access_token=None):
         return False
 
     try:
-        show_all_mail(inbox)
+        show_all_mail(inbox) # an error doing this will stop the process... even if the error is in creating the label. make it more robust.
         access_token = inbox.google_access_token
         r = requests.get('https://accounts.google.com/o/oauth2/revoke?token=%s' % access_token)
         inbox.clear_access_tokens()

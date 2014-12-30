@@ -40,9 +40,12 @@
             </button>
             <ul class="dropdown-menu" role="menu" aria-labelledby="userDropdown">
               <li role="presentation">
-                <a role="menuitem" tabindex="-1" href="/me">Profile</a>
+                <a role="menuitem" tabindex="-1" href="/me">Profile ({{user.inboxes.length}})</a>
               </li>
-              <li role="presentation" ng-if="user.isActive">
+              <li role="presentation">
+                <a role="menuitem" tabindex="-1" href="#" ng-click="oauth()">Add Inbox</a>
+              </li>
+              <li role="presentation" ng-if="!user.isActive">
                 <a role="menuitem" tabindex="-1" href="/plans">Plans</a>
               </li>
               <li role="presentation">

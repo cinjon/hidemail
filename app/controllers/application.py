@@ -10,8 +10,11 @@ from functools import wraps
 from flask import g, send_from_directory, make_response, request, redirect, render_template, jsonify
 from sqlalchemy.sql.expression import func, select
 from flask.ext.mobility.decorators import mobile_template
-import stripe
 
+import stripe
+stripe.api_key = app.config.STRIPE_SK
+
+logger = app.flask_app.logger
 
 # special file handlers and error handlers
 @app.flask_app.route('/favicon.ico')
@@ -23,6 +26,7 @@ def favicon():
 @app.flask_app.route('/')
 @app.flask_app.route('/about')
 @app.flask_app.route('/me')
+@app.flask_app.route('/plans')
 def basic_pages():
     return make_response(open('app/public/template/index.html').read())
 
@@ -56,10 +60,17 @@ def get_google_credentials(access_token, refresh_token, expires_in):
 
 @app.flask_app.route('/auth/google', methods=['POST'])
 def google():
+    logger.debug('in google')
     access_token_url = 'https://accounts.google.com/o/oauth2/token'
     google_profile_url = 'https://www.googleapis.com/plus/v1/people/me/openIdConnect'
 
-    tz_offset = int(request.json.get('state', {}).get('tzOffset', -5*60))
+    state = request.json.get('state', {})
+    tz_offset = int(state.get('tzOffset', -5*60))
+    customer_id = state.get('customer')
+    customer = None
+    if customer_id:
+        customer = app.models.Customer.query.get(int(customer_id))
+
     payload = request.json
     payload = dict(client_id=payload['clientId'],
                    redirect_uri=payload['redirectUri'],
@@ -82,76 +93,92 @@ def google():
 
         sub = profile.get('sub')
         if not sub:
-            return jsonify()
+            return jsonify(success=False, msg="no google sub")
 
         inbox = app.models.Inbox.query.filter_by(google_id=sub).first()
         google_credentials = get_google_credentials(access_token, refresh_token, expires_in)
         if inbox:
-            token = create_token(inbox.customer)
             inbox.google_credentials = google_credentials
-            if not inbox.last_timezone_adj_time:
-                inbox.setup_tz_on_arrival(tz_offset)
-            if not inbox.last_timeblock_adj_time:
-                inbox.setup_tb_on_arrival()
-            return jsonify(token=token, user=inbox.basic_info(), success=True)
+            customer = align_customer_with_inbox(inbox, customer)
+            token = create_token(customer)
+            if not customer.last_timezone_adj_time:
+                customer.setup_tz_on_arrival(tz_offset)
+            if not customer.last_timeblock_adj_time:
+                customer.setup_tb_on_arrival()
+            return jsonify(token=token, user=customer.basic_info(), success=True)
 
         name = profile.get('displayName') or profile.get('name')
+        if not customer:
+            customer = app.models.Customer(name=name)
         email = profile.get('email')
-        customer = app.models.Customer(name=name)
         inbox = app.models.Inbox(name=name, email=email, google_id=sub)
         inbox.set_google_access_token(access_token, expires_in, refresh_token, google_credentials, commit=False)
-        inbox.setup_tz_on_arrival(tz_offset, commit=False)
-        inbox.setup_tb_on_arrival(commit=False)
+        customer.setup_tz_on_arrival(tz_offset, commit=False)
+        customer.setup_tb_on_arrival(commit=False)
+        if customer:
+            inbox.activate()
         customer.inboxes.append(inbox)
         app.db.session.add(inbox)
         app.db.session.add(customer)
         app.db.session.commit()
         app.controllers.mailbox.create_label(inbox) # do this asynchronously
-        return jsonify(token=create_token(customer), user=inbox.basic_info(), success=True)
+        return jsonify(token=create_token(customer), user=customer.basic_info(), success=True)
     except Exception, e:
         app.controllers.mailbox.revoke_access(access_token=access_token)
+        logger.debug(e)
         return jsonify(success=False)
 
-@app.flask_app.route('/api/get-time-info/<email>', methods=['GET'])
-def get_time_info(email):
-    inbox = app.models.Inbox.query.filter_by(email=email).first()
-    if not inbox:
+def align_customer_with_inbox(inbox, customer):
+    if not customer:
+        return inbox.customer
+
+    if customer and inbox.customer.id != customer.id:
+        for i in inbox.customer.inboxes:
+            customer.inboxes.append(i)
+            i.customer = customer
+            app.db.session.commit()
+    return customer
+
+#TODO: obfuscate the id?
+@app.flask_app.route('/api/get-time-info/<customer_id>', methods=['GET'])
+def get_time_info(customer_id):
+    customer = app.models.Customer.query.get(int(customer_id))
+    if not customer:
         return jsonify(success=False)
-    return jsonify(success=True, user=inbox.serialize())
+    return jsonify(success=True, user=customer.serialize())
 
 @app.flask_app.route('/update-blocks', methods=['POST'])
 def update_blocks():
     payload = request.json['data']
-    inbox = app.models.Inbox.query.filter_by(email=payload['email']).first()
-    if not inbox or not inbox.is_tb_adjust():
+    customer = app.models.Customer.query.get(int(payload['customer_id']))
+    if not customer or not customer.is_tb_adjust():
         return jsonify(success=False)
 
     for block in payload['timeblocks']:
-        inbox.set_timeblock(int(block['start']), int(block['length']), commit=False)
+        customer.set_timeblock(int(block['start']), int(block['length']), commit=False)
 
     now = app.utility.get_time()
-    inbox.last_timeblock_adj_time = now
-    if not inbox.customer.last_checked_time and inbox.is_complete(): # for the workers
-        inbox.customer.last_checked_time = now
+    customer.last_timeblock_adj_time = now
+    if not customer.last_checked_time and customer.last_timezone_adj_time:
+        customer.last_checked_time = now
 
     app.db.session.commit()
-    return jsonify(success=True, user=inbox.serialize())
+    return jsonify(success=True, user=customer.serialize())
 
 @app.flask_app.route('/update-timezone', methods=['POST'])
 def update_timezone():
     payload = request.json['data']
-    inbox = app.models.Inbox.query.filter_by(email=payload['email']).first()
-    if not inbox:
+    customer = app.models.Customer.query.get(int(payload['customer_id']))
+    if not customer:
         return jsonify(success=False)
 
-    inbox.set_timezone(offset=int(payload['tz']), commit=False)
+    customer.set_timezone(offset=int(payload['tz']), commit=False)
     now = app.utility.get_time()
-    inbox.last_timezone_adj_time = now
-    if not inbox.customer.last_checked_time and inbox.is_complete(): # set the customer
-        inbox.customer.last_checked_time = now
+    customer.last_timezone_adj_time = now
+    customer.last_checked_time = now
 
     app.db.session.commit()
-    return jsonify(success=True, user=inbox.serialize())
+    return jsonify(success=True, user=customer.serialize())
 
 @app.flask_app.route('/api/user-from-token/<token>')
 def user_from_token(token):
@@ -160,10 +187,8 @@ def user_from_token(token):
         sub = decoded.get('sub')
         if not sub:
             return jsonify(success=False)
-        inboxes = app.models.Inbox.query.filter_by(app.models.Inbox.customer_id == sub)
-        if inboxes.count() == 0:
-            return jsonify(success=True, token=False)
-        return jsonify(user=inboxes.first().basic_info(), success=True, token=token) # Change at some point to include more than one inbox
+        return jsonify(user=app.models.Customer.query.get(int(sub)).basic_info(),
+                       success=True, token=token)
     except Exception, e:
         return jsonify(success=False)
 
@@ -171,30 +196,33 @@ def user_from_token(token):
 def post_payment():
     payload = request.json['data']
     token = payload['token']
-    email = token.get('email')
-    if not email:
-        return jsonify(success=False, msg="no email")
+    customer_id = token.get('customer_id')
+    if not customer_id:
+        return jsonify(success=False, msg="no customer id")
 
     selection = token.get('selection')
     if not selection:
         return jsonify(success=False, msg="no selection")
 
-    inbox = app.models.Inbox.query.filter_by(app.models.Inbox.email == email).first()
-    if not inbox:
-        return jsonify(success=False, msg="no inbox")
+    customer = app.models.Customer.query.get(int(customer_id))
+    if not customer:
+        return jsonify(success=False, msg="no customer")
 
     amount = account_costs[selection]
     account = account_types[selection]
-    customer = inbox.customer
     stripe_customer_id = customer.stripe_customer_id
     if not stripe_customer_id:
-        stripe_customer_id = stripe.Customer.create(card=token, description=inbox.email).id
+        stripe_customer_id = stripe.Customer.create(
+            card=token,description='%s - %s' % (customer.name, customer.id)).id
         customer.set_stripe_id(stripe_customer_id)
     if not stripe_customer_id:
         return jsonify(success=False, msg="couldnt make a stripe customer.")
 
     stripe.Charge.create(
-        amount=amount*100, currency='usd', customer=customer_id
+        amount=amount*100, currency='usd', customer=stripe_customer_id
         )
-    purchase = app.models.Purchase(account_type, amount)
+    purchase = app.models.create_purchase(account_type, amount, commit=False)
     customer.purchases.append(purchase)
+    customer.activate(selection, commit=False)
+    app.db.session.commit()
+    return jsonify(success=True)
