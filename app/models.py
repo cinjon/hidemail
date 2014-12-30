@@ -10,8 +10,9 @@ import httplib2
 from apiclient.discovery import build
 from oauth2client.client import Credentials
 
-logger = app.flask_app.logger
 time_period_change = 3 # days
+account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3}
+account_costs = {'inactive':0, 'free':0, 'monthly':30, 'trial':15} # at some pt switch to subscription billing
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple):
@@ -20,9 +21,6 @@ def manage_inbox_queue(obj):
         elif obj[0] == 'inbox':
             obj = Inbox.query.get(obj[1])
     obj.runWorker()
-
-account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3}
-account_costs = {'inactive':0, 'free':0, 'monthly':30, 'trial':15} # at some pt switch to subscription billing
 
 class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -107,10 +105,11 @@ class Inbox(db.Model):
         # this is going to fire all the time in the user's block.
         # not ideal. should make it so that we aren't doing that.
         now = app.utility.get_time()
-        curr_user_time = now - datetime.timedelta(minutes=self.timezone.offset)
+        offset = self.timezone.offset
+        curr_user_time = now - datetime.timedelta(minutes=offset)
         periods = self.get_timeblock_periods()
         warmingTime = datetime.timedelta(seconds=app.queue.queues.warmingTime)
-        return any([mins_to_datetime(period['start']) - warmingTime <= curr_user_time and curr_user_time < mins_to_datetime(period['end']) for period in periods])
+        return any([mins_to_datetime(period['start'], offset) - warmingTime <= curr_user_time and curr_user_time < mins_to_datetime(period['end'], offset) for period in periods])
 
     def get_gmail_service(self):
         if not self.google_credentials:
@@ -187,10 +186,11 @@ class Inbox(db.Model):
         return ret
 
     def is_tb_adjust(self):
-        return True
-#         now = app.utility.get_time()
-#         time = self.last_timeblock_adj_time
-#         return not time or _is_out_of_range(time, now - datetime.timedelta(time_period_change), now - datetime.timedelta(0, 600))
+        if self.email == 'cinjon.resnick@gmail.com':
+            return True
+        now = app.utility.get_time()
+        time = self.last_timeblock_adj_time
+        return not time or _is_out_of_range(time, now - datetime.timedelta(time_period_change), now - datetime.timedelta(minutes=15))
 
     def basic_info(self):
         return {'name':self.name, 'email':self.email}
@@ -261,9 +261,11 @@ def get_inboxes_from_offset(offset):
         return timezone.get_inboxes()
     return None
 
-def mins_to_datetime(minutes):
+def mins_to_datetime(minutes, offset=None):
     """ Minutes is the time since midnight. We want to return a datetime of what that is today. For example, 120 -> 2am today."""
     now = app.utility.get_time()
+    if offset:
+        now -= datetime.timedelta(minutes=offset)
     return datetime.datetime(now.year, now.month, now.day, int(minutes / 60))
 
 

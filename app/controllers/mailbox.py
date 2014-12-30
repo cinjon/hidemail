@@ -7,13 +7,7 @@ import datetime
 
 from apiclient.http import BatchHttpRequest
 
-api_key = app.flask_app.config['GOOGLE_API_KEY']
-base_url = 'https://www.googleapis.com/gmail/v1/users'
 logger = app.flask_app.logger
-warning_invalid_credentials = ['Invalid Credentials']
-
-is_batch_requests = True # toggle when you complete the batching
-batch_request_limit = 100 # is it really though? or is it actually a 1000?
 
 def get_headers(inbox, content_type=None):
     headers = {'Authorization': 'Bearer {0}'.format(inbox.google_access_token)}
@@ -22,11 +16,9 @@ def get_headers(inbox, content_type=None):
     return headers
 
 def _get_thread_ids_from_label(inbox, label):
-    url = base_url + '/%s/threads?labelIds=%s&key=%s' % (inbox.email, label, api_key)
     thread_ids = []
     try:
-        service = inbox.get_gmail_service()
-        response = service.users().threads().list(userId=inbox.email, labelIds=[label]).execute()
+        response = inbox.get_gmail_service().users().threads().list(userId=inbox.email, labelIds=[label]).execute()
         while 'nextPageToken' in response:
             thread_ids.extend([t['id'] for t in response.get('threads', [])])
             response = service.users().threads().list(
@@ -43,18 +35,18 @@ def do_batch_modify_threads(inbox, threads, payload):
         pass
 
     service = inbox.get_gmail_service()
-    if not service:
-        logger.debug('no service for inbox %s' % inbox.email)
-        return
-
+    batch_request_limit = app.config.batchRequestLimit
     count = 0
     while count < len(threads):
         batch = BatchHttpRequest()
         logger.debug('thread length: %d' % len(threads))
         for thread in threads[count:count + batch_request_limit]:
-            batch.add(service.users().threads().modify(
-                userId=inbox.email, id=thread, body=payload), callback=batch_callback)
+            batch.add(
+                service.users().threads().modify(
+                    userId=inbox.email, id=thread, body=payload),
+                callback=batch_callback)
         batch.execute()
+        count += batch_request_limit
 
 def modify_threads(inbox, addLabel, removeLabel):
     if not addLabel or not removeLabel:
@@ -67,11 +59,7 @@ def modify_threads(inbox, addLabel, removeLabel):
         })
 
 def _modifying_mail_check(inbox):
-    if not is_fresh_token(inbox):
-        logger.debug('Tried to refresh %s. Failed.' % inbox.email)
-
     if not inbox.custom_label_id and not create_label(inbox):
-        logger.debug('We have a problem with generating the label for inbox %s.' % inbox.email)
         return False
     return True
 
@@ -88,10 +76,8 @@ def get_labels(inbox):
         return None
 
     try:
-        service = inbox.get_gmail_service()
-        return service.users().labels().list(userId=inbox.email).execute()
+        return inbox.get_gmail_service().users().labels().list(userId=inbox.email).execute()
     except Exception, e:
-        logger.debug('error in get_labels for inbox %s: %s' % (inbox.email, e))
         return []
 
 def get_label_id(inbox, label_name=None):
@@ -108,8 +94,7 @@ def _delete_label(inbox, label_id=None):
         return True
 
     try:
-        service = inbox.get_gmail_service()
-        service.users().labels().delete(userId=inbox.email, id=label_id).execute()
+        inbox.get_gmail_service().users().labels().delete(userId=inbox.email, id=label_id).execute()
     except Exception, e:
         logger.debug('exception deleting label %s for inbox %s: %s' % (label_id, inbox.email, e))
         return False
@@ -135,8 +120,7 @@ def create_label(inbox, label_name=None):
         'name':label_name
         }
     try:
-        service = inbox.get_gmail_service()
-        label = service.users().labels().create(userId=inbox.email, body=payload).execute()
+        label = inbox.get_gmail_service().users().labels().create(userId=inbox.email, body=payload).execute()
         return True
     except Exception, e:
         logger.debug('Error in creating label for %s: %s' % (inbox.email, e))

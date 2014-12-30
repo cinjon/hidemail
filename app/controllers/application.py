@@ -12,8 +12,6 @@ from sqlalchemy.sql.expression import func, select
 from flask.ext.mobility.decorators import mobile_template
 import stripe
 
-config = app.flask_app.config
-logger = app.flask_app.logger
 
 # special file handlers and error handlers
 @app.flask_app.route('/favicon.ico')
@@ -34,7 +32,7 @@ def create_token(customer):
         'iat': datetime.now(),
         'exp': datetime.now() + timedelta(days=14)
         }
-    token = jwt.encode(payload, config['SECRET_KEY'])
+    token = jwt.encode(payload, app.config.SECRET_KEY)
     return token.decode('unicode_escape')
 
 def get_token_expiry(expires_in):
@@ -50,8 +48,8 @@ def get_google_credentials(access_token, refresh_token, expires_in):
             'access_token': access_token, 'token_type': 'Bearer',
             'expires_in': expires_in, 'refresh_token': refresh_token
         },
-        'client_id': config['GOOGLE_ID'], 'id_token': None,
-        'client_secret': config['GOOGLE_SECRET'], '_class': 'OAuth2Credentials',
+        'client_id': app.config.GOOGLE_ID, 'id_token': None,
+        'client_secret': app.config.GOOGLE_SECRET, '_class': 'OAuth2Credentials',
         'revoke_uri': 'https://accounts.google.com/o/oauth2/revoke',
         'refresh_token': refresh_token, 'user_agent': None
     })
@@ -65,7 +63,7 @@ def google():
     payload = request.json
     payload = dict(client_id=payload['clientId'],
                    redirect_uri=payload['redirectUri'],
-                   client_secret=config['GOOGLE_SECRET'],
+                   client_secret=app.config.GOOGLE_SECRET,
                    code=payload['code'],
                    grant_type='authorization_code')
 
@@ -158,7 +156,7 @@ def update_timezone():
 @app.flask_app.route('/api/user-from-token/<token>')
 def user_from_token(token):
     try:
-        decoded = jwt.decode(token, config['SECRET_KEY'])
+        decoded = jwt.decode(token, app.config.SECRET_KEY)
         sub = decoded.get('sub')
         if not sub:
             return jsonify(success=False)
@@ -167,7 +165,6 @@ def user_from_token(token):
             return jsonify(success=True, token=False)
         return jsonify(user=inboxes.first().basic_info(), success=True, token=token) # Change at some point to include more than one inbox
     except Exception, e:
-        logger.debug('exception %s' % e)
         return jsonify(success=False)
 
 @app.flask_app.route('/post-payment', methods=['POST'])

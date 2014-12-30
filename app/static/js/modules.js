@@ -218,7 +218,9 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       return !$scope.user.lastTzAdj || $scope.user.currTzOffset != getTzOffset();
     }
     $scope.canSetTimeblocks = function() {
-      return true
+      if ($scope.user.email == 'cinjon.resnick@gmail.com') {
+        return true;
+      }
       var time = $scope.user.lastTbAdj
       return !time || is_out_of_range(
         time, new Date(time - 1000*60*60*24*3), new Date(new Date() - 1000*60*15))
