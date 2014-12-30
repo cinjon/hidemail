@@ -4,10 +4,14 @@ var lsKey = 'BatchMail-user';
 var stripePK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
-  .controller('navBar', function($scope, $http, $auth, LocalStorage) {
+  .controller('navBar', function($scope, $http, $auth, $location, LocalStorage) {
     getUser(LocalStorage, $http, $auth, function(user) {
       $scope.user = user;
     });
+
+    $scope.go = function(path) {
+      $location.path(path);
+    }
 
     $scope.$watch('user', function(newVal) {
       if (newVal) {
@@ -58,24 +62,23 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     $scope.plans = [
       {
-        selection:'monthly',
-        description:'Six Month Subscription', price:30,
+        selection:'month',
+        description:'Four Week Cleansing', price:2000,
         url:'/static/partials/plan.html',
         title:"Our Top Choice",
         details:[
-          "Six Months, $5 per month.",
+          "Four weeks, $5 per month.",
           "That's a latte at Sightglass.",
           "Or freedom from notifications."
         ]},
       {
-        selection:'trial',
-        description:'Six Week Trial',
-        price:15,
+        selection:'week',
+        description:'One Week Trial', price:1000,
         url:'/static/partials/plan.html',
         title:"Treat Yourself",
         details:[
-          "Six Weeks, $15.",
-          "Two beers at Monk's Kettle.",
+          "One week, $10.",
+          "A fine beer at Monk's Kettle.",
           "Or focus and deeper thought."
         ]}]
 

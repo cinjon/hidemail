@@ -11,8 +11,8 @@ from apiclient.discovery import build
 from oauth2client.client import Credentials
 
 time_period_change = 3 # days
-account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3}
-account_costs = {'inactive':0, 'free':0, 'monthly':30, 'trial':15} # at some pt switch to subscription billing
+account_types = {'inactive':0, 'free':1, 'month':2, 'week':3}
+account_costs = {'inactive':0, 'free':0, 'month':20, 'week':10} # at some pt switch to subscription billing
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple):
@@ -22,6 +22,18 @@ def manage_inbox_queue(obj):
             obj = Inbox.query.get(obj[1])
     obj.runWorker()
 
+class Purchase(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    creation_time = db.Column(db.DateTime)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), index=True)
+    account_type = db.Column(db.Integer)
+    amount = db.Column(db.Integer)
+
+    def __init__(self, account_type, amount):
+        self.creation_time = app.utility.get_time()
+        self.account_type = account_type
+        self.amount = amount
+
 class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     creation_time = db.Column(db.DateTime)
@@ -30,6 +42,7 @@ class Customer(db.Model):
     stripe_customer_id = db.Column(db.Integer)
     account_type = db.Column(db.Integer) # See Account Types
     inboxes = db.relationship('Inbox', backref='customer', lazy='dynamic')
+    purchases = db.relationship('Purchase', backref='customer', lazy='dynamic')
 
     def __init__(self, name=None, account_type=None):
         self.creation_time = app.utility.get_time()
@@ -90,9 +103,11 @@ class Inbox(db.Model):
         self.custom_label_id = custom_label_id
         self.last_timezone_adj_time = None
         self.last_timeblock_adj_time = None
-        self.is_active = True
+        self.is_active = False
 
     def runWorker(self):
+        if not self.is_active:
+            return
         if self.is_show_mail():
             app.controllers.mailbox.show_all_mail(self)
         else:
@@ -193,14 +208,16 @@ class Inbox(db.Model):
         return not time or _is_out_of_range(time, now - datetime.timedelta(time_period_change), now - datetime.timedelta(minutes=15))
 
     def basic_info(self):
-        return {'name':self.name, 'email':self.email}
+        return {'name':self.name, 'email':self.email, 'isActive':self.is_active}
 
     def serialize(self):
         tz = self.timezone.offset
-        return {'name':self.name, 'email':self.email,
-                'lastTzAdj':self.last_timezone_adj_time, 'lastTbAdj':self.last_timeblock_adj_time,
-                'currTzOffset':tz, 'timeblocks':sorted([tb.serialize() for tb in self.get_timeblocks()], key=lambda k:k['start'])
-                }
+        ret = self.basic_info()
+        ret['lastTzAdj'] = self.last_timezone_adj_time
+        ret['lastTbAdj'] = self.last_timeblock_adj_time
+        ret['currTzOffset'] = tz
+        ret['timeblocks'] = sorted([tb.serialize() for tb in self.get_timeblocks()], key=lambda k:k['start'])
+        return ret
 
 def _is_out_of_range(time, beg, end):
     return time < beg or time > end

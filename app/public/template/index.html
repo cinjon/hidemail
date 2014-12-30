@@ -31,11 +31,26 @@
     <div class="header" class="header navbar navbar-static-top" ng-controller="navBar">
       <div class="navbar-inner">
         <div class="container">
-          <a class="brand" href="/">BatchMail</a>
+          <a class="brand" href="/">KaizinBox</a>
           <a class="connect" ng-if="user == null" ng-click="oauth()">{{userWelcome}}</a>
-          <a class="connect" ng-if="user != null" ng-click="userDropdown()">{{userWelcome}}</a>
-          <a class="connect" href="/plans">Plans</a>
-          <a class="connect" ng-click="logout()">Logout</a>
+          <div class="connect dropdown" ng-if="user != null">
+            <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="true" id="userDropdown">
+              {{userWelcome}}
+              <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu" role="menu" aria-labelledby="userDropdown">
+              <li role="presentation">
+                <a role="menuitem" tabindex="-1" href="/me">Profile</a>
+              </li>
+              <li role="presentation" ng-if="user.isActive">
+                <a role="menuitem" tabindex="-1" href="/plans">Plans</a>
+              </li>
+              <li role="presentation">
+                <a role="menuitem" tabindex="-1" href="#" ng-click="logout()">Logout</a>
+              </li>
+            </ul>
+          </div>
+          <button ng-if="!user || !user.isActive" class="btn btn-default connect" ng-click="go('/plans')">Plans</button>
         </div>
       </div>
     </div>

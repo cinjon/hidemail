@@ -184,12 +184,17 @@ def post_payment():
         return jsonify(success=False, msg="no inbox")
 
     amount = account_costs[selection]
-    customer_id = inbox.stripe_customer_id
-    if not customer_id:
-        customer_id = stripe.Customer.create(card=token, description=inbox.email).id
-        inbox.set_stripe_id(customer_id)
-    if not customer_id:
+    account = account_types[selection]
+    customer = inbox.customer
+    stripe_customer_id = customer.stripe_customer_id
+    if not stripe_customer_id:
+        stripe_customer_id = stripe.Customer.create(card=token, description=inbox.email).id
+        customer.set_stripe_id(stripe_customer_id)
+    if not stripe_customer_id:
         return jsonify(success=False, msg="couldnt make a stripe customer.")
 
     stripe.Charge.create(
-        amount=amount, currency='usd', customer=customer_id)
+        amount=amount*100, currency='usd', customer=customer_id
+        )
+    purchase = app.models.Purchase(account_type, amount)
+    customer.purchases.append(purchase)

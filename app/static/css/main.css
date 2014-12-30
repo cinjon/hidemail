@@ -64,6 +64,10 @@ body {
     }
 }
 
+.brand {
+    text-decoration: none !important;
+    color:inherit;
+}
 .btn-white {
     background-color:white;
 }
