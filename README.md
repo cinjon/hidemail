@@ -19,17 +19,19 @@ X 7. Attach the above to a cron that runs on the hour and loops through everyone
 X9. If in a user's block, then let it pass. If not, then hide it.
 
 Sweet. Next steps:
-1. Get the batching working.
+X 1. Get the batching working.
 2. Get it working in Heroku.
-3. Attach it to my own email.
+X 3. Attach it to my own email.
 X 3a. Need checks on all the functions so we don't break people's email.
-4. Add account_type on users (probably a bijective Account model)
+X 4. Add account_type on users (probably a bijective Account model)
    - account_type is what kind of account, e.g. inactive, unpaid, monthly, six week, w/e
 5. Add pricing [page] and Stripe Connect using that Account model
 6. Dropdown in top right will let you see what email it is and let you logout.
 X 7. About page.
 8. Cute mascot. A hamster obviously.
 9. Something needs to check that the account info is complete before adding the inbox to the queue.
+10. Need to figure out how to store account date of activation and charges.
+X 11. Split inbox into customer and inbox so that a customer can have multiple inboxes. this way, they can add inboxes without paying more.
 
 What's necessary to pushing it out to people? 1,2,3,4
 What's necessary to getting people to apy for it? 5,7
