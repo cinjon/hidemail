@@ -45,6 +45,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         if (response.data.success) {
           $scope.user = response.data.user;
           LocalStorage.set(lsKey, $scope.user)
+          $scope.go('/me')
         } else {
           console.log('failed to authenticate.');
         }
@@ -53,11 +54,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
   })
   .controller('home', function($scope, $http, $auth, $location, LocalStorage) {
     getUser(LocalStorage, $http, $auth, function(user) {
-      if (user && user.accountType && user.accountType != 'inactive') {
-        $location.path('/me')
-      } else {
-        $scope.user = user;
-      }
+      $scope.user = user;
     });
 
     $scope.introductions = [
@@ -153,11 +150,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       }
     });
 
+    $scope.allInboxes = null;
     var setUser = function(user) {
       $scope.user = user;
-      $scope.introductions.unshift('Your inboxes: ' + $scope.user.inboxes.map(function(inbox) {
-          return inbox.email;
-      }).join(', '));
+      $scope.allInboxes = $scope.user.inboxes.map(function(inbox) {return inbox.email;}).join(', ');
       if ($scope.user.lastTzAdj) {
         $scope.user.lastTzAdj = new Date($scope.user.lastTzAdj)
       }
@@ -224,11 +220,9 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     $scope.canSetTimezone = function() { //This gets called every single time the clock ticks
-      return true;
       return !$scope.user.lastTzAdj || $scope.user.currTzOffset != getTzOffset();
     }
     $scope.canSetTimeblocks = function() {
-      return true;
       var time = $scope.user.lastTbAdj
       return !time || is_out_of_range(
         time, new Date(time - 1000*60*60*24*3), new Date(new Date() - 1000*60*15))

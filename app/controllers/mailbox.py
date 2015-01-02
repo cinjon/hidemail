@@ -107,7 +107,8 @@ def delete_label(inbox, label_name=None):
 
 def create_label(inbox, label_name=None):
     def form_label(base):
-        return 'z' + '-'.join([''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(6)), base]) # the z is so that we're at the bottom of the labels list
+        # the z is so that we're at the bottom of the labels list
+        return 'z' + '-'.join([''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(6)), base])
 
     if not is_fresh_token(inbox):
         return

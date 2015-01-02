@@ -1,5 +1,10 @@
 <div class="introductions">
-  <div ng-repeat="line in introductions" class="row introduction">
+  <div ng-if="allInboxes != null" class="row introduction">
+    <div class="col-xs-12">
+      {{allInboxes}}
+    </div>
+  </div>
+  <div ng-repeat="line in introductions track by $index" class="row introduction">
     <div class="col-xs-12">
       {{line}}
     </div>
