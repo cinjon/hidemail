@@ -17,7 +17,7 @@ account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3}
 account_costs = {'inactive':0, 'free':0, 'monthly':10, 'trial':8}
 
 def manage_inbox_queue(obj):
-    if isinstance(obj, tuple):
+    if isinstance(obj, tuple): # obj: (ty, id, var)
         if obj[0] == 'customer':
             Customer.query.get(obj[1]).runWorker()
         elif obj[0] == 'inbox':
@@ -86,10 +86,11 @@ class Customer(db.Model):
             db.session.commit()
 
     def runWorker(self):
-        show_mail = self.is_show_mail()
+        var = 'show_mail' if self.is_show_mail() else 'hide_mail'
         for inbox in self.inboxes:
             if inbox.is_active:
-                app.queue.queues.IQ.get_queue().enqueue(manage_inbox_queue, ('inbox', inbox.id, show_mail))
+                app.queue.queues.IQ.get_queue().enqueue(
+                    manage_inbox_queue, ('inbox', inbox.id, var))
 
     def is_show_mail(self):
         # this is going to fire all the time in the user's block.
@@ -186,13 +187,11 @@ class Inbox(db.Model):
     google_access_token_expiration = db.Column(db.DateTime)
     google_refresh_token = db.Column(db.Text)
     google_credentials = db.Column(db.Text) # json blob
-    custom_label_name = db.Column(db.String(25))
-    custom_label_id = db.Column(db.String(25))
     is_active = db.Column(db.Boolean)
+    threads = db.relationship('Thread', backref='inbox', lazy='dynamic')
 
     def __init__(self, email=None, name=None,
                  google_id=None, google_access_token=None, google_refresh_token=None,
-                 custom_label_name=None, custom_label_id=None,
                  google_access_token_expiration=None, google_credentials=None):
         self.email = None
         if email:
@@ -204,16 +203,17 @@ class Inbox(db.Model):
         self.google_access_token_expiration = google_access_token_expiration
         self.google_refresh_token = google_refresh_token
         self.google_credentials = google_credentials
-        self.custom_label_name = custom_label_name
-        self.custom_label_id = custom_label_id
         self.is_active = False
 
-    def runWorker(self, show_mail):
-        if not self.is_active: # has this been revoked between queueing and running
+    def runWorker(self, var):
+        if not self.is_active and not (var == 'archive'): # check for revoke between queueing and running
             return
-        if show_mail:
+
+        if var == 'archive':
+            app.controllers.mailbox.archive(self)
+        elif var == 'show_mail':
             app.controllers.mailbox.show_all_mail(self)
-        else:
+        elif var == 'hide_mail':
             app.controllers.mailbox.hide_all_mail(self)
 
     def get_gmail_service(self):
@@ -234,9 +234,8 @@ class Inbox(db.Model):
             db.session.commit()
 
     def activate(self, commit=True):
-        self.is_active = True
-        if commit:
-            db.session.commit()
+        app.queue.queues.IQ.get_queue().enqueue(
+            manage_inbox_queue, ('inbox', self.id, 'archive'))
 
     def set_google_access_token(self, access_token, expires_in, refresh_token=None, credentials=None, commit=True):
         self.google_access_token = access_token or self.google_access_token
@@ -248,6 +247,51 @@ class Inbox(db.Model):
 
     def serialize(self):
         return {'name':self.name, 'email':self.email, 'isActive':self.is_active}
+
+class Thread(db.Model):
+    """
+    Tracks the set of threads that have been moved.
+    inbox_id is the foreign key to the associated inbox, but because there may be multiple inboxes with a particular thread, need to also have a separate field to uniq id
+    """
+    thread_id = db.Column(db.Text, primary_key=True) # from google
+    creation_time = db.Column(db.DateTime)
+    last_hide_time = db.Column(db.DateTime)
+    last_show_time = db.Column(db.DateTime)
+    inbox_id = db.Column(db.Integer, db.ForeignKey('inbox.id'), index=True)
+    inbox_unique_id = db.Column(db.Integer)
+    active = db.Column(db.Boolean, index=True)
+
+    def __init__(self, thread_id, inbox_unique_id):
+        self.thread_id = thread_id
+        self.inbox_unique_id = inbox_unique_id
+        self.active = True
+        self.creation_time = app.utility.get_time()
+        self.last_hide_time = None
+        self.last_show_time = None
+
+    def hide(self, dt, commit=True):
+        self.active = True
+        self.last_hide_time = dt
+        if commit:
+            db.session.commit()
+
+    def show(self, dt, commit=True):
+        self.active = False
+        self.last_show_time = dt
+        if commit:
+            db.session.commit()
+
+def get_or_create_thread(thread_id, inbox, commit=True):
+    thread = Thread.query.filter_by(thread_id=thread_id, inbox_unique_id=inbox.id).all()
+    if not thread:
+        thread = Thread(thread_id, inbox.id)
+        inbox.threads.append(thread)
+        db.session.add(thread)
+        if commit:
+            db.session.commit()
+    else:
+        thread = thread[0]
+    return thread
 
 class Timeblock(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -3,6 +3,7 @@
 var lsKey = 'localmbxflow';
 var stripeTestPK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
 var stripeLivePK = 'pk_live_puq7AjfvQJkAfND9Ddmghww1'
+var stripePK = stripeLivePK
 var accountTypes = {0:'Inactive', 1:'Free', 2:'Subscription', 3:'Week Trial'}
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
@@ -116,7 +117,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         ]}]
 
     var handler = StripeCheckout.configure({
-      key: stripeTestPK,
+      key: stripePK,
 //       image: '/make-some-image.png,
       token: function(token) {
         token['selection'] = $scope.selection

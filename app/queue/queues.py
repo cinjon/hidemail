@@ -47,8 +47,9 @@ class InboxQueueManager(object):
         now = app.utility.get_time()
         last_checked_param = now - datetime.timedelta(0, checkedPeriod)
         for customer in app.models.Customer.query.filter(app.models.Customer.last_checked_time < last_checked_param):
-            customer.set_last_checked_time(now)
-            customer.runWorker()
+            if customer.is_active():
+                customer.set_last_checked_time(now)
+                customer.runWorker()
         cls.enqueue()
 IQM = InboxQueueManager()
 

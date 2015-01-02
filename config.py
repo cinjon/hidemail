@@ -1,4 +1,5 @@
 import os
+debug = 'DYNO' not in os.environ
 CSRF_ENABLED = True
 SECRET_KEY = os.environ.get('HIDEMAIL_SECRET_KEY')
 basedir = os.path.abspath(os.path.dirname(__file__))

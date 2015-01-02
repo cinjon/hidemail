@@ -4,6 +4,7 @@ import string
 import random
 import json
 import datetime
+import time
 
 from apiclient.http import BatchHttpRequest
 
@@ -15,130 +16,121 @@ def get_headers(inbox, content_type=None):
         headers['Content-Type'] = content_type
     return headers
 
-def _get_thread_ids_from_label(inbox, label):
+def _get_thread_ids_from_label(inbox, label, q=None):
+    backoff = 1
     thread_ids = []
-    try:
-        response = inbox.get_gmail_service().users().threads().list(userId=inbox.email, labelIds=[label]).execute()
-        while 'nextPageToken' in response:
+    q = q or ''
+    service = inbox.get_gmail_service()
+    response = service.users().threads().list(userId=inbox.email, labelIds=[label], q=q).execute()
+    while 'nextPageToken' in response:
+        try:
             thread_ids.extend([t['id'] for t in response.get('threads', [])])
             response = service.users().threads().list(
-                userId=inbox.email, labelIds=[label], pageToken=response['nextPageToken']).execute()
-        thread_ids.extend([t['id'] for t in response.get('threads', [])])
-        return thread_ids
-    except Exception, e:
-        logger.debug('Error in getting thread ids for %s from label %s: %s' % (inbox.email, label, e))
-        return thread_ids
+                userId=inbox.email, labelIds=[label], q=q,
+                pageToken=response['nextPageToken']).execute()
+        except Exception, e: # this should be a 429 or something. unsure what exactly.
+            time.sleep(backoff)
+            backoff = backoff * 2
+    thread_ids.extend([t['id'] for t in response.get('threads', [])])
+    return thread_ids
 
-def do_batch_modify_threads(inbox, threads, payload):
-    def batch_callback(request_id, response, exception):
-        """In the response is: historyId, snippet, sizeEstimate, threadId, and labelIds"""
-        pass
+class Batcher(object):
+    def __init__(self, userId, service, payload, threads):
+        self.count = 0
+        self.backoff = 1
+        self.userId = userId
+        self.service = service
+        self.payload = payload
+        self.threads = threads
+        self.failed_threads = set()
+        self.seen_responses = 0
+        self.batch_fail = False
+        self.batch_request_limit = 10 # each modify thread takes up a unit quota of 10, can get away with bursting though.
+        #     self.batch_request_limit = app.config.batchRequestLimit
 
-    service = inbox.get_gmail_service()
-    batch_request_limit = app.config.batchRequestLimit
-    count = 0
-    while count < len(threads):
+    def inc(self):
+        if self.backoff < 64:
+            self.backoff = self.backoff * 2
+
+    def get(self):
+        return self.backoff + random.random()/2 # between 0 and 500ms
+
+    def runWorker(self, service=None, userId=None):
+        service = self.service
+        if not self.threads:
+            return
+
         batch = BatchHttpRequest()
-        for thread in threads[count:count + batch_request_limit]:
-            batch.add(
-                service.users().threads().modify(
-                    userId=inbox.email, id=thread, body=payload),
-                callback=batch_callback)
+        count = 0
+        while self.threads and count < self.batch_request_limit:
+            count += 1
+            thread = self.threads.pop(0)
+            batch.add(callback=self.cb, request_id=thread,
+                      request=service.users().threads().modify(
+                          userId=self.userId, id=thread, body=self.payload))
         batch.execute()
-        count += batch_request_limit
 
-def modify_threads(inbox, addLabel, removeLabel):
-    if not addLabel or not removeLabel:
-        return
+    def cb(self, request_id, response, exception):
+        """In the response is: historyId, snippet, sizeEstimate, threadId, and labelIds"""
+        self.seen_responses += 1
+        if exception:
+            self.threads.append(request_id)
+            self.batch_fail = True
+        if self.seen_responses == self.batch_request_limit:
+            if self.batch_fail:
+                backoff = self.get()
+                time.sleep(backoff)
+                self.inc()
+            self.seen_responses = 0
+            self.batch_fail = False
+            self.runWorker()
 
-    threads = _get_thread_ids_from_label(inbox, removeLabel)
-    do_batch_modify_threads(inbox, threads, {
-        'removeLabelIds':[removeLabel], 'addLabelIds':[addLabel]
-        })
+def archive(inbox, dt=None):
+    """Archives all mail from any day earlier than the specified dt. Uses exponential backoff if it hits an error"""
+    dt = dt or app.utility.get_time() - datetime.timedelta(days=29)
+    date_string = '%s/%s/%s' % (dt.year, dt.month, dt.day)
+    q = 'before:%s' % date_string
+    threads = _get_thread_ids_from_label(inbox, 'INBOX', q)
+    payload = {'removeLabelIds':['INBOX']}
+    batcher = Batcher(inbox.email, inbox.get_gmail_service(), payload, threads)
+    thread_count = len(batcher.threads)
+    while batcher.threads:
+        try:
+            batcher.runWorker()
+        except Exception, e:
+            pass
+    inbox.is_active = True
+    app.db.session.commit()
 
-def _modifying_mail_check(inbox):
-    if not inbox.custom_label_id and not create_label(inbox):
-        return False
-    return True
+def modify_threads(inbox, payloadKey, label, thread_ids):
+    Batcher(inbox.email, inbox.get_gmail_service(), {payloadKey:[label]}, thread_ids).runWorker()
 
 def hide_all_mail(inbox):
-    if _modifying_mail_check(inbox):
-        modify_threads(inbox, inbox.custom_label_id, 'INBOX')
+    label = 'INBOX'
+    threads = _get_thread_ids_from_label(inbox, label)
+    threads = [app.models.get_or_create_thread(thread, inbox, commit=False) for thread in threads]
+    dt = app.utility.get_time()
+    for thread in threads:
+        thread.hide(dt, False)
+    app.db.session.commit()
+    modify_threads(inbox, 'removeLabelIds', label,
+                   [thread.thread_id for thread in threads])
 
 def show_all_mail(inbox):
-    if _modifying_mail_check(inbox):
-        modify_threads(inbox, 'INBOX', inbox.custom_label_id)
-
-def get_labels(inbox):
-    if not inbox:
-        return None
-
-    try:
-        return inbox.get_gmail_service().users().labels().list(userId=inbox.email).execute()
-    except Exception, e:
-        return []
-
-def get_label_id(inbox, label_name=None):
-    if not label_name or not inbox:
-        return None
-
-    for label in get_labels(inbox).get('labels', []):
-        if label.get('name') == label_name:
-            return label.get('id')
-    return None
-
-def _delete_label(inbox, label_id=None):
-    if not label_id or not inbox:
-        return True
-
-    try:
-        inbox.get_gmail_service().users().labels().delete(
-            userId=inbox.email, id=label_id).execute()
-        return True
-    except Exception, e:
-        logger.debug('exception deleting label %s for inbox %s: %s' % (label_id, inbox.email, e))
-        return False
-
-def delete_label(inbox, label_name=None):
-    if inbox.custom_label_id:
-        return _delete_label(inbox, inbox.custom_label_id)
-    else:
-        return _delete_label(inbox, get_label_id(inbox, label_name))
-
-def create_label(inbox, label_name=None):
-    def form_label(base):
-        # the z is so that we're at the bottom of the labels list
-        return 'z' + '-'.join([''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(6)), base])
-
-    if not is_fresh_token(inbox):
-        return
-
-    label_name = label_name or form_label('mailboxFlow')
-    if not delete_label(inbox, label_name):
-        logger.debug('trouble creating label %s for %s, couldnt delete it.' % (label_name, inbox.email))
-        return False
-
-    payload = {
-        'labelListVisibility':'labelHide',
-        'messageListVisibility':'hide',
-        'name':label_name
-        }
-    try:
-        label = inbox.get_gmail_service().users().labels().create(userId=inbox.email, body=payload).execute()
-        inbox.custom_label_name = label['name']
-        inbox.custom_label_id   = label['id']
-        app.db.session.commit()
-        return True
-    except Exception, e:
-        logger.debug('Error in creating label for %s: %s' % (inbox.email, e))
-        return False
+    dt = app.utility.get_time()
+    threads = inbox.threads.filter_by(active=True).all()
+    modify_threads(inbox, 'addLabelIds', 'INBOX',
+                   [thread.thread_id for thread in threads])
+    for thread in threads:
+        thread.show(dt, False)
+    app.db.session.commit()
 
 def revoke_access(inbox=None, access_token=None):
     if not inbox or not is_fresh_token(inbox):
         return False
 
     try:
-        show_all_mail(inbox) # an error doing this will stop the process... even if the error is in creating the label. make it more robust.
+        show_all_mail(inbox)
         access_token = inbox.google_access_token
         r = requests.get('https://accounts.google.com/o/oauth2/revoke?token=%s' % access_token)
         inbox.clear_access_tokens()

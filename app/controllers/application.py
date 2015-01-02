@@ -12,7 +12,7 @@ from sqlalchemy.sql.expression import func, select
 from flask.ext.mobility.decorators import mobile_template
 
 import stripe
-stripe.api_key = app.config.STRIPE_TEST_SK
+stripe.api_key = app.config.STRIPE_LIVE_SK
 
 logger = app.flask_app.logger
 
@@ -120,7 +120,6 @@ def google():
         app.db.session.add(inbox)
         app.db.session.add(customer)
         app.db.session.commit()
-        app.controllers.mailbox.create_label(inbox) # do this asynchronously
         return jsonify(token=create_token(customer), user=customer.basic_info(), success=True)
     except Exception, e:
         app.controllers.mailbox.revoke_access(access_token=access_token)
