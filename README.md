@@ -25,14 +25,14 @@ X 3. Attach it to my own email.
 X 3a. Need checks on all the functions so we don't break people's email.
 X 4. Add account_type on users (probably a bijective Account model)
    - account_type is what kind of account, e.g. inactive, unpaid, monthly, six week, w/e
-5. Add pricing [page] and Stripe Connect using that Account model
+X 5. Add pricing [page] and Stripe Connect using that Account model
 X 6. Dropdown in top right will let you see what email it is and let you logout.
 X 7. About page.
 8. Cute mascot. A hamster obviously.
 X 9. Something needs to check that the account info is complete before adding the inbox to the queue.
-10. Need to figure out how to store account date of activation and charges.
+X 10. Need to figure out how to store account date of activation and charges.
 X 11. Split inbox into customer and inbox so that a customer can have multiple inboxes. this way, they can add inboxes without paying more.
-12. Add Stripe Subscription.
+X 12. Add Stripe Subscription.
 X 13. Think through the flow, maybe add an activate button after signing up and paying. --> No activate button. Once you pay, you are activated.
 X 14. Email account - cinjon@mailboxflow.com
 15. SSL

@@ -220,7 +220,7 @@ def buy_trial(customer, token):
     stripe_customer_id = customer.stripe_customer_id
     if not stripe_customer_id:
         stripe_customer_id = stripe.Customer.create(
-            card=token,description='%s - %s' % (customer.name, customer.id)).id
+            card=token.get('id'), description='%s - %s' % (customer.name, customer.id)).id
 
     if not stripe_customer_id:
         return jsonify(success=False, msg="stripe customer creation failed")
