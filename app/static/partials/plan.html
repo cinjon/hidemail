@@ -1,12 +1,32 @@
-<h3 class="planTitle">{{plan.title}}</h3>
-<ul class="planDetails">
-  <li class="planDetail" ng-repeat="line in plan.details">{{line}}</li>
-</ul>
+<div class="col-xs-10 col-xs-offset-1 col-md-3 col-md-offset-2">
+  <div class="panel panel-primary">
+    <div class="panel-heading">
+      <h3 class="panel-title">{{plan.title}}</h3>
+    </div>
+    <div class="panel-body">
+      <div class="plan-price">
+        <h1>
+          ${{plan.price / 100}}<span ng-if="plan.isSubscription" class="subscript">/{{plan.period}}</span>
+        </h1>
+      </div>
+      <table class="table">
+        <tr ng-repeat="detail in plan.details track by $index" ng-class="{active:$index % 2 == 1}" class="plan-detail">
+          <td>
+            {{detail}}
+          </td>
+        </tr>
+      </table>
+    </div>
+    <div class="panel-footer">
+      <div class="planButton" ng-if="user != null && user.isActive">
+        <button class="btn btn-success" ng-disabled="true">Active!</button>
+      </div>
+      <div class="planButton" ng-if="user != null && !user.isActive">
+        <button class="btn btn-success" id="stripeButton" ng-click="buy(plan)">Purchase</button>
+      </div>
+      <div class="planButton" ng-if="user == null">
+        <button class="btn btn-success" id="connectButton" ng-click="oauth()">Connect</button>
+      </div>
+    </div>
+  </div>
 </div>
-<div class="planStripe" ng-if="user != null">
-  <button id="stripeButton" ng-click="buy(plan)">Purchase</button>
-</div>
-<div class="planConnect" ng-if="user == null">
-  <button id="connectButton" ng-click="oauth()">Connect</button>
-</div>
-

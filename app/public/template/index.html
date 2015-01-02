@@ -41,32 +41,39 @@
     <div class="header" class="header navbar navbar-static-top" ng-controller="navBar">
       <div class="navbar-inner">
         <div class="container">
-          <a class="brand" href="/">mailboxFlow</a>
-          <button class="btn btn-default connect" ng-if="user == null" ng-click="oauth()">{{userWelcome}}</button>
-          <div class="connect dropdown" ng-if="user != null">
-            <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="true" id="userDropdown">
-              {{userWelcome}}
-              <span class="caret"></span>
-            </button>
-            <ul class="dropdown-menu" role="menu" aria-labelledby="userDropdown">
-              <li role="presentation">
-                <a role="menuitem" tabindex="-1" href="/me">Profile ({{user.inboxes.length}})</a>
-              </li>
-              <li role="presentation">
-                <a role="menuitem" tabindex="-1" href="#" ng-click="oauth()">Add Inbox</a>
-              </li>
-              <li role="presentation" ng-if="!user.isActive">
-                <a role="menuitem" tabindex="-1" href="/plans">Plans</a>
-              </li>
-              <li role="presentation" ng-if="user.isActive">
-                <a role="menuitem" tabindex="-1" href="#">{{getAccountType(user.accountType)}}</a>
-              </li>
-              <li role="presentation">
-                <a role="menuitem" tabindex="-1" href="#" ng-click="logout()">Logout</a>
-              </li>
-            </ul>
+          <div class="row">
+            <div class="col-xs-4">
+              <a class="brand" href="/">mailboxFlow</a>
+            </div>
+            <div class="col-xs-8">
+              <button class="btn btn-default connect" ng-if="user == null" ng-click="oauth()">{{userWelcome}}</button>
+              <div class="connect dropdown" ng-if="user != null">
+                <button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="true" id="userDropdown">
+                  {{userWelcome}}
+                  <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu" role="menu" aria-labelledby="userDropdown">
+                  <li role="presentation">
+                    <a role="menuitem" tabindex="-1" href="/me">Profile ({{user.inboxes.length}})</a>
+                  </li>
+                  <li role="presentation">
+                    <a role="menuitem" tabindex="-1" href="#" ng-click="oauth()">Add Inbox</a>
+                  </li>
+                  <li role="presentation" ng-if="!user.isActive">
+                    <a role="menuitem" tabindex="-1" href="/plans">Plans</a>
+                  </li>
+                  <li role="presentation" ng-if="user.isActive">
+                    <a role="menuitem" tabindex="-1" href="#">{{getAccountType(user.accountType)}}</a>
+                  </li>
+                  <li role="presentation">
+                    <a role="menuitem" tabindex="-1" href="#" ng-click="logout()">Logout</a>
+                  </li>
+                </ul>
+              </div>
+              <button class="btn btn-default connect" ng-click="go('/plans')">Plans</button>
+              <span id="inactive-warning" class="connect" ng-if="user && !user.isActive">Inactive</span>
+            </div>
           </div>
-          <button class="btn btn-default connect" ng-click="go('/plans')">Plans</button>
         </div>
       </div>
     </div>
@@ -77,11 +84,11 @@
         </div>
       </div>
     </div>
-    <footer id="footer" class="footer">
+    <div id="footer" class="footer">
       <div class="container">
         my name is Cinjon. you can reach me <a href="mailto:cinjon@mailboxflow.com">here</a>.
       </div>
-    </footer>
+    </div>
   </div>
 </body>
 

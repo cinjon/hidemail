@@ -4,16 +4,19 @@ body {
 }
 
 .content {
-    height: 85%;
-    /*padding-top:50px;*/
-    width: 90%;
-    margin: auto;
+    padding-bottom:80px;
 }
 
 .header {
     padding-top:30px;
     padding-bottom:30px;
     font-size:20px;
+}
+
+#inactive-warning {
+    color:#D8000C;
+    position:relative;
+    top:3px;
 }
 
 .connect {
@@ -48,6 +51,11 @@ body {
   background-attachment: fixed;
   overflow: hidden;
   min-height: 100%;
+}
+
+.page {
+    min-height:100%;
+    position:relative;
 }
 
 @media only screen and (max-device-width: 750px) {
@@ -106,19 +114,47 @@ body {
     margin-top:50px;
     margin-bottom:75px;
 }
-.footer {
-    width:90%;
-    margin:auto;
+#footer {
+    width:100%;
+    bottom:0px;
+    position:absolute;
+}
+
+.plans {
+    margin-top:100px;;
 }
 .plan {
-    height:200px;
-    width:300px;
-    border:1px solid;
-    border-radius:4px;
-    border-color:#b94a48;
-    float:left;
-    margin-right:120px;
+    margin-right:60px;
 }
+.panel {
+    text-align:center;
+}
+.panel:hover {
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4), 0 1px 5px rgba(130, 130, 130, 0.35);
+}
+.panel-body {
+    padding: 0px;
+    text-align: center;
+}
+.plan-price {
+    background-color: rgba(220,220,220,.17);
+    box-shadow: 0 1px 0 #dcdcdc, inset 0 1px 0 #fff;
+    padding: 20px;
+    margin: 0;
+    height: 80px;
+}
+.plan-price h1 {
+    line-height: 1em;
+    padding: 0;
+    margin: 0;
+}
+.plan-detail {
+    text-align:center;
+}
+.subscript {
+    font-size: 25px;
+}
+
 .planTitle {
     text-align:center;
 }
@@ -137,4 +173,15 @@ body {
 }
 .ng-invalid {
     color: red;
+}
+.panel-primary > .panel-heading {
+    color: inherit;
+    background-color:inherit;
+    border-color:inherit;
+}
+.panel-heading {
+    border-bottom: 0px;
+}
+.panel-primary {
+    border-color:inherit;
 }
