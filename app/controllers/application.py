@@ -115,7 +115,7 @@ def google():
         inbox.set_google_access_token(access_token, expires_in, refresh_token, google_credentials, commit=False)
         customer.setup_tz_on_arrival(tz_offset, commit=False)
         customer.setup_tb_on_arrival(commit=False)
-        if customer:
+        if customer.is_active():
             inbox.activate()
         customer.inboxes.append(inbox)
         app.db.session.add(inbox)

@@ -58,12 +58,15 @@
               <li role="presentation" ng-if="!user.isActive">
                 <a role="menuitem" tabindex="-1" href="/plans">Plans</a>
               </li>
+              <li role="presentation" ng-if="user.isActive">
+                <a role="menuitem" tabindex="-1" href="#">{{getAccountType(user.accountType)}}</a>
+              </li>
               <li role="presentation">
                 <a role="menuitem" tabindex="-1" href="#" ng-click="logout()">Logout</a>
               </li>
             </ul>
           </div>
-          <button ng-if="!user || !user.isActive" class="btn btn-default connect" ng-click="go('/plans')">Plans</button>
+          <button class="btn btn-default connect" ng-click="go('/plans')">Plans</button>
         </div>
       </div>
     </div>

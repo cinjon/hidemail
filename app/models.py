@@ -14,7 +14,7 @@ logger = app.flask_app.logger
 
 time_period_change = 3 # days
 account_types = {'inactive':0, 'free':1, 'month':2, 'week':3}
-account_costs = {'inactive':0, 'free':0, 'month':20, 'week':10} # at some pt switch to subscription billing
+account_costs = {'inactive':0, 'free':0, 'month':10, 'week':5} # at some pt switch to subscription billing
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple):
@@ -65,6 +65,9 @@ class Customer(db.Model):
         self.last_timezone_adj_time = None
         self.last_timeblock_adj_time = None
 
+    def is_active(self):
+        return self.account_type != account_types['inactive']
+
     def activate(self, account_type, commit=True):
         for inbox in self.inboxes:
             inbox.activate(commit=False)
@@ -74,6 +77,7 @@ class Customer(db.Model):
 
     def inactivate(self, commit=True):
         for inbox in self.inboxes:
+            inbox.show_all_mail()
             inbox.inactivate(commit=False)
         self.account_type = account_types['inactive']
         if commit:
@@ -105,6 +109,7 @@ class Customer(db.Model):
 
     def set_timezone(self, offset, commit=True):
         timezone = create_timezone(offset, not commit)
+        self.last_timezone_adj_time = app.utility.get_time()
         self.timezones.append(timezone)
         if commit:
             db.session.commit()

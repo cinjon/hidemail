@@ -3,6 +3,7 @@
 var lsKey = 'localmbxflow';
 var stripeTestPK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
 var stripeLivePK = 'pk_live_puq7AjfvQJkAfND9Ddmghww1'
+var accountTypes = {0:'Inactive', 1:'Free', 2:'Subscription', 3:'Week Trial'}
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
   .controller('navBar', function($scope, $http, $auth, $location, LocalStorage) {
@@ -12,6 +13,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     $scope.go = function(path) {
       $location.path(path);
+    }
+
+    $scope.getAccountType = function(accountInt) {
+      return accountTypes[accountInt]
     }
 
     $scope.$watch('user', function(newVal) {
@@ -45,6 +50,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         if (response.data.success) {
           $scope.user = response.data.user;
           LocalStorage.set(lsKey, $scope.user)
+          console.log('yoooo')
           $scope.go('/me')
         } else {
           console.log('failed to authenticate.');
@@ -123,7 +129,8 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
   })
   .controller('profile', function($scope, $http, Post, $timeout, $auth, LocalStorage) {
     $scope.introductions = [
-      "You can change periods once every three days and the timezone when you're in a new place."
+      "You can change periods once every three days.",
+      "You can change the timezone when you're in a new place."
     ]
 
     $scope.clock = Date.now()
@@ -136,7 +143,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     getUser(LocalStorage, $http, $auth, function(user) {
       if (!user) {
-        $location.path('/') //TODO: send the null user with it.
+        $location.path('/')
       } else {
         $scope.user = user;
         $http.get('/api/get-time-info/' + user.customer_id).then(function(response) {
