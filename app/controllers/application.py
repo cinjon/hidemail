@@ -60,7 +60,6 @@ def get_google_credentials(access_token, refresh_token, expires_in):
 
 @app.flask_app.route('/auth/google', methods=['POST'])
 def google():
-    logger.debug('in google')
     access_token_url = 'https://accounts.google.com/o/oauth2/token'
     google_profile_url = 'https://www.googleapis.com/plus/v1/people/me/openIdConnect'
 
@@ -192,6 +191,9 @@ def user_from_token(token):
     except Exception, e:
         return jsonify(success=False)
 
+account_types = app.models.account_types
+account_costs = app.models.account_costs
+
 @app.flask_app.route('/post-payment', methods=['POST'])
 def post_payment():
     payload = request.json['data']
@@ -208,21 +210,44 @@ def post_payment():
     if not customer:
         return jsonify(success=False, msg="no customer")
 
-    amount = account_costs[selection]
-    account = account_types[selection]
+    account_type = account_types[selection]
+    if account_type == account_types['monthly']:
+        return buy_subscription(customer, token)
+    else:
+        return buy_trial(customer, token)
+
+def buy_trial(customer, token):
     stripe_customer_id = customer.stripe_customer_id
     if not stripe_customer_id:
         stripe_customer_id = stripe.Customer.create(
             card=token,description='%s - %s' % (customer.name, customer.id)).id
-        customer.set_stripe_id(stripe_customer_id)
-    if not stripe_customer_id:
-        return jsonify(success=False, msg="couldnt make a stripe customer.")
 
-    stripe.Charge.create(
-        amount=amount*100, currency='usd', customer=stripe_customer_id
-        )
-    purchase = app.models.create_purchase(account_type, amount, commit=False)
+    if not stripe_customer_id:
+        return jsonify(success=False, msg="stripe customer creation failed")
+    else:
+        customer.set_stripe_id(stripe_customer_id)
+        stripe.Charge.create(amount=account_costs['trial']*100,
+                             currency='usd', customer=stripe_customer_id)
+        return _complete_purchase(customer, 'trial', account_costs['trial']*100)
+
+def buy_subscription(customer, token):
+    stripe_customer_id = customer.stripe_customer_id
+    if not stripe_customer_id:
+        description = '%s' % customer.name
+        stripe_customer_id = stripe.Customer.create(
+            card=token.get('id'), plan='monthly', description=description).id
+
+    if not stripe_customer_id:
+        return jsonify(success=False, msg="stripe customer creation failed")
+    else:
+        customer.set_stripe_id(stripe_customer_id)
+        return _complete_purchase(customer, 'monthly', account_costs['monthly']*100)
+
+def _complete_purchase(customer, ty, amount):
+    purchase = app.models.create_purchase(
+        account_types[ty], amount, commit=False)
     customer.purchases.append(purchase)
-    customer.activate(selection, commit=False)
     app.db.session.commit()
-    return jsonify(success=True)
+    customer.activate(ty, commit=True)
+    return jsonify(success=True, user=customer.serialize())
+

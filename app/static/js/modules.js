@@ -6,7 +6,7 @@ var stripeLivePK = 'pk_live_puq7AjfvQJkAfND9Ddmghww1'
 var accountTypes = {0:'Inactive', 1:'Free', 2:'Subscription', 3:'Week Trial'}
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
-  .controller('navBar', function($scope, $http, $auth, $location, LocalStorage) {
+  .controller('navBar', function($scope, $http, $auth, $location, LocalStorage, UserData) {
     getUser(LocalStorage, $http, $auth, function(user) {
       $scope.user = user;
     });
@@ -30,6 +30,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       }
     })
 
+    $scope.$watch(function() { return UserData.getUser() }, function(newValue) {
+      $scope.user = newValue;
+    }, true)
+
     $scope.logout = function() {
       $scope.user = null;
       LocalStorage.remove(lsKey);
@@ -50,8 +54,11 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         if (response.data.success) {
           $scope.user = response.data.user;
           LocalStorage.set(lsKey, $scope.user)
-          console.log('yoooo')
-          $scope.go('/me')
+          if ($scope.user.isActive) {
+            $scope.go('/me')
+          } else {
+            $scope.go('/plans')
+          }
         } else {
           console.log('failed to authenticate.');
         }
@@ -64,39 +71,46 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     });
 
     $scope.introductions = [
-      "We accomplish more quality work when we reach a state of flow.",
-      "Today's connectedness makes it harder for us to reach this state."
+      "We accomplish quality work when we reach a state of flow.",
+      "Today's connectedness can make this difficult."
     ]
     $scope.information = [
-      "mailboxFlow lets you select time periods to respond to your email.",
+      "mailboxFlow lets you select periods to respond to your email.",
       "At all other times, it hides your inbox. From all devices."
     ]
   })
-  .controller('plans', function($scope, $http, $auth, LocalStorage, Post) {
+  .controller('plans', function($scope, $http, $auth, LocalStorage, Post, UserData) {
+    var setUser = function(user) {
+      LocalStorage.set(lsKey, user);
+      $scope.user = user;
+      UserData.setUser(user);
+    }
+
     getUser(LocalStorage, $http, $auth, function(user) {
-      $scope.user = user
+      setUser(user);
     })
 
     $scope.plans = [
       {
-        selection:'month',
-        description:'Four Week Cleansing', price:2000,
+        selection:'monthly',
+        description:'Monthly Subscription', price:1000,
+        isSubscription:true, period:'month',
         url:'/static/partials/plan.html',
-        title:"Our Top Choice",
+        title:"Monthly Service",
         details:[
-          "Four weeks, $5 per month.",
-          "That's a latte at Sightglass.",
-          "Or freedom from notifications."
+          "Two lattes at Sightglass.",
+          "Or focus and deeper thought.",
+          "Our Top Choice."
         ]},
       {
-        selection:'week',
-        description:'One Week Trial', price:1000,
+        selection:'trial',
+        description:'One Week Trial', price:800,
         url:'/static/partials/plan.html',
-        title:"Treat Yourself",
+        title:"One Week Trial",
         details:[
-          "One week, $10.",
+          "Treat yourself.",
           "A fine beer at Monk's Kettle.",
-          "Or focus and deeper thought."
+          "Or the opportunity to flow."
         ]}]
 
     var handler = StripeCheckout.configure({
@@ -106,8 +120,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         token['selection'] = $scope.selection
         token['customer_id'] = $scope.user.customer_id
         Post.postPayment(token).then(function(response) {
-          if (response.success) {
-            console.log('success str')
+          var data = response.data;
+          if (data.success) {
+            setUser(data.user);
+            $location.path('/me')
           } else {
             console.log('fale str')
           }
@@ -127,12 +143,13 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       })
     }
   })
-  .controller('profile', function($scope, $http, Post, $timeout, $auth, $location, LocalStorage) {
+  .controller('profile', function($scope, $http, Post, $timeout, $auth, $location, LocalStorage, UserData) {
     $scope.introductions = [
       "You can change periods once every three days.",
       "You can change the timezone when you're in a new place."
     ]
 
+    console.log(UserData.getUser())
     $scope.clock = Date.now()
     $scope.tickInterval = 1000
     var tick = function() {
@@ -159,6 +176,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     $scope.allInboxes = null;
     var setUser = function(user) {
+      UserData.setUser(user);
       $scope.user = user;
       if ($scope.user.inboxes.length > 0) {
         $scope.allInboxes = 'Your Inboxes: ' + $scope.user.inboxes.map(function(inbox) {return inbox.email;}).join(', ');
@@ -329,7 +347,6 @@ var getUser = function(LocalStorage, http, auth, callback) {
           callback(null)
         }
       } else {
-        console.log('failed to get data from token');
         callback(null);
       }
     })

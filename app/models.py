@@ -13,8 +13,8 @@ from oauth2client.client import Credentials
 logger = app.flask_app.logger
 
 time_period_change = 3 # days
-account_types = {'inactive':0, 'free':1, 'month':2, 'week':3}
-account_costs = {'inactive':0, 'free':0, 'month':10, 'week':5} # at some pt switch to subscription billing
+account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3}
+account_costs = {'inactive':0, 'free':0, 'monthly':10, 'trial':8}
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple):
@@ -31,6 +31,7 @@ class Purchase(db.Model):
     customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), index=True)
     account_type = db.Column(db.Integer)
     amount = db.Column(db.Integer)
+    stripe_token_id = db.Column(db.Text)
 
     def __init__(self, account_type, amount):
         self.creation_time = app.utility.get_time()
@@ -49,7 +50,7 @@ class Customer(db.Model):
     creation_time = db.Column(db.DateTime)
     name = db.Column(db.Text)
     last_checked_time = db.Column(db.DateTime) # for the workers to check when they last saw an inbox
-    stripe_customer_id = db.Column(db.Integer)
+    stripe_customer_id = db.Column(db.Text)
     account_type = db.Column(db.Integer) # See Account Types
     last_timezone_adj_time = db.Column(db.DateTime)
     last_timeblock_adj_time = db.Column(db.DateTime)
@@ -72,6 +73,7 @@ class Customer(db.Model):
         for inbox in self.inboxes:
             inbox.activate(commit=False)
         self.account_type = account_types[account_type]
+        self.last_checked_time = app.utility.get_time()
         if commit:
             db.session.commit()
 
@@ -87,7 +89,6 @@ class Customer(db.Model):
         show_mail = self.is_show_mail()
         for inbox in self.inboxes:
             if inbox.is_active:
-                logger.debug('inbox %s active; %s' % (inbox.email, show_mail))
                 app.queue.queues.IQ.get_queue().enqueue(manage_inbox_queue, ('inbox', inbox.id, show_mail))
 
     def is_show_mail(self):

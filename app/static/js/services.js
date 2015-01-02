@@ -38,7 +38,6 @@ angular.module('hidemailServices', ['ngRoute', 'ngResource', 'LocalStorageModule
     function getUser() {
       return userData;
     }
-
     return {
       getUser: getUser,
       setUser: setUser

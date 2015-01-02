@@ -20,7 +20,7 @@ X9. If in a user's block, then let it pass. If not, then hide it.
 
 Sweet. Next steps:
 X 1. Get the batching working.
-2. Get it working in Heroku.
+X 2. Get it working in Heroku.
 X 3. Attach it to my own email.
 X 3a. Need checks on all the functions so we don't break people's email.
 X 4. Add account_type on users (probably a bijective Account model)
@@ -29,7 +29,7 @@ X 4. Add account_type on users (probably a bijective Account model)
 X 6. Dropdown in top right will let you see what email it is and let you logout.
 X 7. About page.
 8. Cute mascot. A hamster obviously.
-9. Something needs to check that the account info is complete before adding the inbox to the queue.
+X 9. Something needs to check that the account info is complete before adding the inbox to the queue.
 10. Need to figure out how to store account date of activation and charges.
 X 11. Split inbox into customer and inbox so that a customer can have multiple inboxes. this way, they can add inboxes without paying more.
 12. Add Stripe Subscription.
