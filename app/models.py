@@ -77,7 +77,7 @@ class Customer(db.Model):
 
     def inactivate(self, commit=True):
         for inbox in self.inboxes:
-            inbox.show_all_mail()
+            app.controllers.mailbox.show_all_mail(inbox)
             inbox.inactivate(commit=False)
         self.account_type = account_types['inactive']
         if commit:
