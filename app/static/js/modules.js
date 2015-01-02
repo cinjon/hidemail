@@ -7,8 +7,13 @@ var accountTypes = {0:'Inactive', 1:'Free', 2:'Subscription', 3:'Week Trial'}
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
   .controller('navBar', function($scope, $http, $auth, $location, LocalStorage, UserData) {
+    $scope.$watch(function() { return UserData.getUser() }, function(newValue) {
+      $scope.user = newValue;
+    }, true)
+
     getUser(LocalStorage, $http, $auth, function(user) {
       $scope.user = user;
+      UserData.setUser(user)
     });
 
     $scope.go = function(path) {
@@ -29,10 +34,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         $scope.userWelcome = "Get Started"
       }
     })
-
-    $scope.$watch(function() { return UserData.getUser() }, function(newValue) {
-      $scope.user = newValue;
-    }, true)
 
     $scope.logout = function() {
       $scope.user = null;

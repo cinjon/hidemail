@@ -18,6 +18,11 @@ body {
     position:relative;
     top:3px;
 }
+#active-reminder {
+    color:#00529B;
+    position:relative;
+    top:3px;
+}
 
 .connect {
     float:right;
