@@ -8,10 +8,10 @@
 
 <div class="timeChanges">
   <div class="row timezone">
-    <div class="col-xs-3 timeText">
+    <div class="col-xs-4 timeText">
       {{getTimezoneDesc()}}
     </div>
-    <div class="col-xs-8 col-xs-offset-1">
+    <div class="col-xs-7 col-xs-offset-1">
       <button class="btn btn-sm btn-white timeChoice"
               ng-disabled="!canSetTimezone()" ng-click="setTimezone()"
               ng-class="{btnHover:canSetTimezone()}">
@@ -21,10 +21,10 @@
   </div>
 
   <div class="row timehour" ng-repeat="block in blocks">
-    <div class="col-xs-3 timeText">
+    <div class="col-xs-4 timeText">
       {{getBlockDescription(block)}}
     </div>
-    <div class="col-xs-4 col-xs-offset-1">
+    <div class="col-xs-7 col-xs-offset-1">
       <select ng-if="canSetTimeblocks()" class="form-control timeChoice timeSelect" ng-model="block.time"
               ng-options="time for time in getAvailableTimes(block.time)" ng-change="updateBlocks()">
       </select>

@@ -101,7 +101,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
           if (response.success) {
             console.log('success str')
           } else {
-            console.log('success str')
+            console.log('fale str')
           }
         });
       }
@@ -121,8 +121,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
   })
   .controller('profile', function($scope, $http, Post, $timeout, $auth, LocalStorage) {
     $scope.introductions = [
-      "Clicking the clock sets your timezone. Selecting from the dropdown changes your email periods.",
-      "You can change periods every three days and the timezone when you're somewhere new."
+      "You can change periods once every three days and the timezone when you're in a new place."
     ]
 
     $scope.clock = Date.now()
@@ -140,7 +139,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         $scope.user = user;
         $http.get('/api/get-time-info/' + user.customer_id).then(function(response) {
           var data = response.data;
-          console.log(response)
           if (data.success) {
             setUser(data.user);
           } else {
@@ -152,6 +150,9 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     var setUser = function(user) {
       $scope.user = user;
+      $scope.introductions.unshift('Your inboxes: ' + $scope.user.inboxes.map(function(inbox) {
+          return inbox.email;
+      }).join(', '));
       if ($scope.user.lastTzAdj) {
         $scope.user.lastTzAdj = new Date($scope.user.lastTzAdj)
       }
@@ -209,9 +210,9 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     $scope.getTimezoneDesc = function() {
       if (!$scope.user.lastTzAdj) {
-        return "Set your timezone to:"
+        return "Click to set timezone to:"
       } else if ($scope.canSetTimezone()) {
-        return "Change timezone to:"
+        return "Click to change timezone to:"
       } else {
         return "Timezone set to:"
       }
@@ -222,9 +223,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       return !$scope.user.lastTzAdj || $scope.user.currTzOffset != getTzOffset();
     }
     $scope.canSetTimeblocks = function() {
-      if ($scope.user.email == 'cinjon.resnick@gmail.com') {
-        return true;
-      }
+      return true;
       var time = $scope.user.lastTbAdj
       return !time || is_out_of_range(
         time, new Date(time - 1000*60*60*24*3), new Date(new Date() - 1000*60*15))
@@ -234,7 +233,11 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     $scope.getBlockDescription = function(block) {
-      return 'Period ' + ($scope.blocks.indexOf(block)+1) + ' (' + block.length + ' Minutes): '
+      if ($scope.canSetTimeblocks()) {
+        return 'Select to change period ' + ($scope.blocks.indexOf(block) + 1) + ':'
+      } else {
+        return 'Period start time:'
+      }
     }
 
     $scope.getAvailableTimes = function(blockTime) {
@@ -262,7 +265,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
       Post.postBlocks($scope.user.customer_id, timeblocks).then(function(response) {
         var data = response.data;
-        console.log(data)
         if (data.success) {
           setUser(data.user);
         } else {
