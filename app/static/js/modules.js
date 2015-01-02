@@ -127,7 +127,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       })
     }
   })
-  .controller('profile', function($scope, $http, Post, $timeout, $auth, LocalStorage) {
+  .controller('profile', function($scope, $http, Post, $timeout, $auth, $location, LocalStorage) {
     $scope.introductions = [
       "You can change periods once every three days.",
       "You can change the timezone when you're in a new place."
@@ -207,7 +207,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     $scope.timezoneOffset = function() {
-      if (!$scope.user.lastTzAdj || $scope.canSetTimezone()) {
+      if (!$scope.user || !$scope.user.lastTzAdj || $scope.canSetTimezone()) {
         return offsetString(-1 * getTzOffset() / 60);
       } else {
         return offsetString(-1 * $scope.user.currTzOffset / 60);
@@ -222,7 +222,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     $scope.getTimezoneDesc = function() {
-      if (!$scope.user.lastTzAdj) {
+      if ($scope.user && !$scope.user.lastTzAdj) {
         return "Click to set timezone to:"
       } else if ($scope.canSetTimezone()) {
         return "Click to change timezone to:"
@@ -232,9 +232,12 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     $scope.canSetTimezone = function() { //This gets called every single time the clock ticks
-      return !$scope.user.lastTzAdj || $scope.user.currTzOffset != getTzOffset();
+      return $scope.user && (!$scope.user.lastTzAdj || $scope.user.currTzOffset != getTzOffset());
     }
     $scope.canSetTimeblocks = function() {
+      if (!$scope.user) {
+        return false;
+      }
       var time = $scope.user.lastTbAdj
       return !time || is_out_of_range(
         time, new Date(time - 1000*60*60*24*3), new Date(new Date() - 1000*60*15))
@@ -311,29 +314,27 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
   ]);
 
 var getUser = function(LocalStorage, http, auth, callback) {
+  var userToken = auth.getToken()
   var isSupported = LocalStorage.isSupported()
-  if (!isSupported || !LocalStorage.get(lsKey)) {
-    if (userToken) {
-      var userToken = $auth.getToken()
-      http.get('/api/user-from-token/' + userToken).then(function(response) {
-        var data = response.data;
-        if (data.success == true) {
-          if (data.user) {
-            if (callback) {
-              callback(data.user);
-            }
-            LocalStorage.set(lsKey, data.user);
-          } else if (data.token == false) {
-            auth.logout()
-          }
+  if (userToken && (!isSupported || !LocalStorage.get(lsKey))) {
+    console.log('getting from token')
+    http.get('/api/user-from-token/' + userToken).then(function(response) {
+      var data = response.data;
+      if (data.success) {
+        if (data.user) {
+          LocalStorage.set(lsKey, data.user);
+          callback(data.user);
+        } else if (data.token == false) {
+          auth.logout()
+          callback(null)
         }
-      })
-    }
+      } else {
+        console.log('failed to get data from token');
+        callback(null);
+      }
+    })
   } else if (isSupported) {
-    var user = LocalStorage.get(lsKey)
-    if (user && callback) {
-      callback(user);
-    }
+    callback(LocalStorage.get(lsKey))
   }
 }
 
