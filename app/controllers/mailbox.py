@@ -106,13 +106,13 @@ def delete_label(inbox, label_name=None):
         return _delete_label(inbox, get_label_id(inbox, label_name))
 
 def create_label(inbox, label_name=None):
-    def prepend_random(base):
-        return '-'.join([''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(6)), base])
+    def form_label(base):
+        return 'z' + '-'.join([''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(6)), base]) # the z is so that we're at the bottom of the labels list
 
     if not is_fresh_token(inbox):
         return
 
-    label_name = label_name or prepend_random('mailboxFlow')
+    label_name = label_name or form_label('mailboxFlow')
     if not delete_label(inbox, label_name):
         logger.debug('trouble creating label %s for %s, couldnt delete it.' % (label_name, inbox.email))
         return False

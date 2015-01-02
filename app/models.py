@@ -94,7 +94,7 @@ class Customer(db.Model):
         curr_user_time = now - datetime.timedelta(minutes=offset)
         periods = self.get_timeblock_periods()
         warmingTime = datetime.timedelta(seconds=app.queue.queues.warmingTime)
-        return any([self.start_mins_to_datetime(period['start'], offset) - warmingTime <= curr_user_time and curr_user_time < mins_to_datetime(period['end'], offset) for period in periods])
+        return any([mins_to_datetime(period['start'], offset) - warmingTime <= curr_user_time and curr_user_time < mins_to_datetime(period['end'], offset) for period in periods])
 
     def is_tb_adjust(self):
         if any([i.email == 'cinjon.resnick@gmail.com' for i in self.inboxes]):
@@ -203,7 +203,6 @@ class Inbox(db.Model):
         self.is_active = False
 
     def runWorker(self, show_mail):
-        logger.debug('running worker on inbox %s with show_mail %s' % (self.email, show_mail))
         if not self.is_active: # has this been revoked between queueing and running
             return
         if show_mail:

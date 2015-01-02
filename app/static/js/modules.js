@@ -1,6 +1,6 @@
 'use strict';
 
-var lsKey = 'BatchMail-user';
+var lsKey = 'localmbxflow';
 var stripeTestPK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
 var stripeLivePK = 'pk_live_puq7AjfvQJkAfND9Ddmghww1'
 
@@ -60,9 +60,13 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       }
     });
 
-    $scope.introductions = [ //This should def be more playful. The hamster.
-      "We believe that interruptions are the bane of good work.",
-      "We believe that you should have command over them.",
+    $scope.introductions = [
+      "We accomplish more quality work when we reach a state of flow.",
+      "Today's connectedness makes it harder for us to reach this state."
+    ]
+    $scope.information = [
+      "mailboxFlow lets you select time periods to respond to your email.",
+      "At all other times, it hides your inbox. From all devices."
     ]
   })
   .controller('plans', function($scope, $http, $auth, LocalStorage, Post) {
@@ -113,7 +117,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       var description = plan.description;
       var price = plan.price;
       handler.open({
-        name: 'KaizInbox',
+        name: 'mailboxFlow',
         description: description,
         amount: price,
         email: $scope.user.inboxes[0].email

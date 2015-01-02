@@ -7,10 +7,7 @@
 </div>
 
 <div class="introductions">
-  <div class="row introduction col-xs-offset-4">
-    BatchMail lets you select time periods to respond to your email.
-  </div>
-  <div class="row introduction col-xs-offset-4">
-    At all other times, it hides your inbox. From all devices.
+  <div ng-repeat="line in information" class="row introduction col-xs-offset-4">
+    {{line}}
   </div>
 </div>

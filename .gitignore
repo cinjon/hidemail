@@ -49,3 +49,4 @@ venv
 documents
 *.p
 audio
+dump.rdb
