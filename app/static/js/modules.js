@@ -1,7 +1,8 @@
 'use strict';
 
 var lsKey = 'BatchMail-user';
-var stripePK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
+var stripeTestPK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
+var stripeLivePK = 'pk_live_puq7AjfvQJkAfND9Ddmghww1'
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
   .controller('navBar', function($scope, $http, $auth, $location, LocalStorage) {
@@ -92,7 +93,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         ]}]
 
     var handler = StripeCheckout.configure({
-      key: stripePK,
+      key: stripeTestPK,
 //       image: '/square-image.png',
       token: function(token) {
         token['selection'] = $scope.selection

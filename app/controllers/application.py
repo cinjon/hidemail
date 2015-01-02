@@ -12,7 +12,7 @@ from sqlalchemy.sql.expression import func, select
 from flask.ext.mobility.decorators import mobile_template
 
 import stripe
-stripe.api_key = app.config.STRIPE_SK
+stripe.api_key = app.config.STRIPE_TEST_SK
 
 logger = app.flask_app.logger
 
