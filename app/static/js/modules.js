@@ -153,7 +153,12 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     $scope.allInboxes = null;
     var setUser = function(user) {
       $scope.user = user;
-      $scope.allInboxes = $scope.user.inboxes.map(function(inbox) {return inbox.email;}).join(', ');
+      if ($scope.user.inboxes.length > 0) {
+        $scope.allInboxes = 'Your Inboxes: ' + $scope.user.inboxes.map(function(inbox) {return inbox.email;}).join(', ');
+      } else {
+        $scope.allInboxes = null;
+      }
+
       if ($scope.user.lastTzAdj) {
         $scope.user.lastTzAdj = new Date($scope.user.lastTzAdj)
       }
