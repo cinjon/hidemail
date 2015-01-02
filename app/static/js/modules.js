@@ -54,13 +54,14 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         if (response.data.success) {
           $scope.user = response.data.user;
           LocalStorage.set(lsKey, $scope.user)
+          UserData.setUser($scope.user)
           if ($scope.user.isActive) {
             $scope.go('/me')
           } else {
             $scope.go('/plans')
           }
         } else {
-          console.log('failed to authenticate.');
+          console.log('Failed to authenticate.');
         }
       })
     }
@@ -79,7 +80,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       "At all other times, it hides your inbox. From all devices."
     ]
   })
-  .controller('plans', function($scope, $http, $auth, LocalStorage, Post, UserData) {
+  .controller('plans', function($scope, $http, $auth, $location, LocalStorage, Post, UserData) {
     var setUser = function(user) {
       LocalStorage.set(lsKey, user);
       $scope.user = user;
@@ -115,7 +116,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     var handler = StripeCheckout.configure({
       key: stripeTestPK,
-//       image: '/square-image.png',
+//       image: '/make-some-image.png,
       token: function(token) {
         token['selection'] = $scope.selection
         token['customer_id'] = $scope.user.customer_id
@@ -125,7 +126,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
             setUser(data.user);
             $location.path('/me')
           } else {
-            console.log('fale str')
+            console.log('err, something went wrong.')
           }
         });
       }
@@ -149,7 +150,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       "You can change the timezone when you're in a new place."
     ]
 
-    console.log(UserData.getUser())
     $scope.clock = Date.now()
     $scope.tickInterval = 1000
     var tick = function() {
@@ -157,6 +157,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       $timeout(tick, $scope.tickInterval);
     }
     $timeout(tick, $scope.tickInterval);
+
+    $scope.$watch(function() { return UserData.getUser() }, function(newValue) {
+      $scope.user = newValue;
+    }, true)
 
     getUser(LocalStorage, $http, $auth, function(user) {
       if (!user) {
@@ -168,7 +172,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
           if (data.success) {
             setUser(data.user);
           } else {
-            console.log('oops, coulnt get the users time info')
+            console.log('err, user time info went wrong.')
           }
         })
       }
@@ -219,7 +223,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         if (data.success) {
           setUser(data.user);
         } else {
-          console.log('failure in posting timezone');
+          console.log('err, failure in posting timezone');
         }
       })
     }
@@ -300,7 +304,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         if (data.success) {
           setUser(data.user);
         } else {
-          console.log('failure in posting blocks');
+          console.log('err, failure in posting blocks');
         }
       })
     }
@@ -335,7 +339,6 @@ var getUser = function(LocalStorage, http, auth, callback) {
   var userToken = auth.getToken()
   var isSupported = LocalStorage.isSupported()
   if (userToken && (!isSupported || !LocalStorage.get(lsKey))) {
-    console.log('getting from token')
     http.get('/api/user-from-token/' + userToken).then(function(response) {
       var data = response.data;
       if (data.success) {

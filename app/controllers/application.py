@@ -124,7 +124,6 @@ def google():
         return jsonify(token=create_token(customer), user=customer.basic_info(), success=True)
     except Exception, e:
         app.controllers.mailbox.revoke_access(access_token=access_token)
-        logger.debug(e)
         return jsonify(success=False)
 
 def align_customer_with_inbox(inbox, customer):
