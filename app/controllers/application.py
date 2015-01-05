@@ -27,6 +27,7 @@ def favicon():
 @app.flask_app.route('/about')
 @app.flask_app.route('/me')
 @app.flask_app.route('/plans')
+@app.flask_app.route('/faq')
 def basic_pages():
     return make_response(open('app/public/template/index.html').read())
 

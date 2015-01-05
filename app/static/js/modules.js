@@ -311,6 +311,26 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       })
     }
   })
+  .controller('faq', function($scope) {
+    $scope.faq = [
+      {'question':"What if I don't like the time periods I choose?",
+       'answer':"Change them. You can do this once every three days."},
+      {'question':"What happens when I'm in a new timezone?",
+       'answer':"Visit your profile and there will be an option to adjust it."},
+      {'question':"I have 17,000 emails. Are you really going to hide them all from me?",
+       'answer':"No. We archive everything older than two weeks. Then, we hide your emails from you."},
+      {'question':"Wait, what? How do I find my emails if they're archived?",
+       'answer':"Search for them in the top bar. This is probably what you do anyways."},
+      {'question':"What if I miss something important?",
+       'answer':"It's possible. It's more likely though that it was someone else putting an item on the top of your to-do list."},
+      {'question':"Why did you make this?",
+       'answer':"We made this. No one builds anything alone. I got a lot of help along the way."},
+      {'question':"Ok, but really, what was your motivation and does it involve selling my data?",
+       'answer':"I built this because I wanted to free myself from checking my email and more easily settle into a flow when working. I figured others want to as well. I charge for this so that I don't need to sell your data."},
+      {'question':"But couldn't you be selling my data as well?",
+       'answer':"It's possible, but I think that it would be really bad if I was and everyone found out. So I'm not and I feel pretty good about building something that others want to use."}
+      ]
+  })
   .config([
     '$routeProvider', '$locationProvider', '$authProvider',
     function($routeProvider, $locationProvider, $authProvider, $window) {
@@ -326,6 +346,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         .when('/plans', {
           templateUrl: '/static/partials/plans.html',
           controller: 'plans'
+        })
+        .when('/faq', {
+          templateUrl: '/static/partials/faq.html',
+          controller: 'faq'
         })
 	.otherwise({
 	  redirectTo: '/'

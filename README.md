@@ -35,7 +35,11 @@ X 11. Split inbox into customer and inbox so that a customer can have multiple i
 X 12. Add Stripe Subscription.
 X 13. Think through the flow, maybe add an activate button after signing up and paying. --> No activate button. Once you pay, you are activated.
 X 14. Email account - cinjon@mailboxflow.com
-15. SSL
+X 15. SSL
+16. Stripe Tests
+17. Error Reporting to Users
+18. Using my own account.
+X 19. FAQ
 
 What's necessary to pushing it out to people? 1,2,3,4
 What's necessary to getting people to apy for it? 5,7

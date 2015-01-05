@@ -190,3 +190,14 @@ body {
 .panel-primary {
     border-color:inherit;
 }
+
+.faq {
+    font-size:25px;
+    margin-bottom:55px;
+}
+.f-question {
+    font-weight:600;
+}
+.f-answer {
+    margin-top:10px;
+}
