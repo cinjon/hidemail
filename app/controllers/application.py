@@ -11,9 +11,7 @@ from flask import g, send_from_directory, make_response, request, redirect, rend
 from sqlalchemy.sql.expression import func, select
 from flask.ext.mobility.decorators import mobile_template
 
-import stripe
-stripe.api_key = app.config.STRIPE_LIVE_SK
-
+stripe_handler = app.controllers.stripe_handler.StripeHandler()
 logger = app.flask_app.logger
 
 # special file handlers and error handlers
@@ -199,48 +197,57 @@ def post_payment():
     token = payload['token']
     customer_id = token.get('customer_id')
     if not customer_id:
-        return jsonify(success=False, msg="no customer id")
+        return jsonify(success=False, error='request_fail')
 
     selection = token.get('selection')
     if not selection:
-        return jsonify(success=False, msg="no selection")
+        return jsonify(success=False, error='request_fail')
 
     customer = app.models.Customer.query.get(int(customer_id))
     if not customer:
-        return jsonify(success=False, msg="no customer")
+        return jsonify(success=False, error='request_fail')
 
-    account_type = account_types[selection]
-    if account_type == account_types['monthly']:
-        return buy_subscription(customer, token)
-    else:
-        return buy_trial(customer, token)
+    try:
+        account_type = account_types[selection]
+        if account_type == account_types['monthly']:
+            return buy_subscription(customer, token)
+        else:
+            return buy_trial(customer, token)
+    except Exception, e:
+        logger.debug('Error with stripe call for customer %d and selection %s: %s' % (customer.id, selection, e))
+        return jsonify(success=False, error='payment_error')
 
 def buy_trial(customer, token):
     stripe_customer_id = customer.stripe_customer_id
     if not stripe_customer_id:
-        stripe_customer_id = stripe.Customer.create(
-            card=token.get('id'), description='%s - %s' % (customer.name, customer.id)).id
+        description='%s - %s' % (customer.name, customer.id)
+        card=token.get('id')
+        stripe_customer = stripe_handler.create_customer(
+            card=card, description=description)
+        if not stripe_customer['success']:
+            return stripe_customer
+        stripe_customer_id = stripe_customer['id']
 
-    if not stripe_customer_id:
-        return jsonify(success=False, msg="stripe customer creation failed")
-    else:
-        customer.set_stripe_id(stripe_customer_id)
-        stripe.Charge.create(amount=account_costs['trial']*100,
-                             currency='usd', customer=stripe_customer_id)
-        return _complete_purchase(customer, 'trial', account_costs['trial']*100)
+    customer.set_stripe_id(stripe_customer_id)
+    amount = account_costs['trial']*100
+    charge = stripe_handler.charge(amount=amount, currency='usd',
+                                   stripe_customer_id=stripe_customer_id)
+    if not charge['success']:
+        return charge
+    return _complete_purchase(customer, 'trial', amount)
 
 def buy_subscription(customer, token):
     stripe_customer_id = customer.stripe_customer_id
     if not stripe_customer_id:
         description = '%s' % customer.name
-        stripe_customer_id = stripe.Customer.create(
-            card=token.get('id'), plan='monthly', description=description).id
+        stripe_customer = stripe_handler.create_customer(
+            card=card, description=description, plan='monthly')
+        if not stripe_customer['success']:
+            return stripe_customer
+        stripe_customer_id = stripe_customer['id']
 
-    if not stripe_customer_id:
-        return jsonify(success=False, msg="stripe customer creation failed")
-    else:
-        customer.set_stripe_id(stripe_customer_id)
-        return _complete_purchase(customer, 'monthly', account_costs['monthly']*100)
+    customer.set_stripe_id(stripe_customer_id)
+    return _complete_purchase(customer, 'monthly', account_costs['monthly']*100)
 
 def _complete_purchase(customer, ty, amount):
     purchase = app.models.create_purchase(
