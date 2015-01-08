@@ -87,7 +87,7 @@ class Batcher(object):
 
 def archive(inbox, dt=None):
     """Archives all mail from any day earlier than the specified dt. Uses exponential backoff if it hits an error"""
-    dt = dt or app.utility.get_time() - datetime.timedelta(days=29)
+    dt = dt or app.utility.get_time() - datetime.timedelta(days=15)
     date_string = '%s/%s/%s' % (dt.year, dt.month, dt.day)
     q = 'before:%s' % date_string
     threads = _get_thread_ids_from_label(inbox, 'INBOX', q)
@@ -100,6 +100,7 @@ def archive(inbox, dt=None):
         except Exception, e:
             pass
     inbox.is_active = True
+    inbox.is_archived = True
     app.db.session.commit()
 
 def modify_threads(inbox, payloadKey, label, thread_ids):

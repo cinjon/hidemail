@@ -18,9 +18,11 @@ account_costs = {'inactive':0, 'free':0, 'monthly':10, 'trial':8}
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple): # obj: (ty, id, var)
+        logger.debug('managing inbox queue: %s' % obj[0])
         if obj[0] == 'customer':
             Customer.query.get(obj[1]).runWorker()
         elif obj[0] == 'inbox':
+            logger.debug('in inbox with %d and %s' % (obj[1], obj[2]))
             Inbox.query.get(obj[1]).runWorker(obj[2])
     else: # queue manager
         obj.runWorker()
@@ -79,9 +81,14 @@ class Customer(db.Model):
 
     def inactivate(self, commit=True):
         for inbox in self.inboxes:
-            app.controllers.mailbox.show_all_mail(inbox)
             inbox.inactivate(commit=False)
         self.account_type = account_types['inactive']
+
+        # Reset timeblocks to be a week ago.
+        now = app.utility.get_time()
+        self.last_timezone_adj_time = now - datetime.timedelta(days=7)
+        self.last_timeblock_adj_time = now - datetime.timedelta(days=7)
+
         if commit:
             db.session.commit()
 
@@ -188,6 +195,7 @@ class Inbox(db.Model):
     google_refresh_token = db.Column(db.Text)
     google_credentials = db.Column(db.Text) # json blob
     is_active = db.Column(db.Boolean)
+    is_archived = db.Column(db.Boolean)
     threads = db.relationship('Thread', backref='inbox', lazy='dynamic')
 
     def __init__(self, email=None, name=None,
@@ -204,16 +212,17 @@ class Inbox(db.Model):
         self.google_refresh_token = google_refresh_token
         self.google_credentials = google_credentials
         self.is_active = False
+        self.is_archived = False
 
     def runWorker(self, var):
-        if not self.is_active and not (var == 'archive'): # check for revoke between queueing and running
-            return
-
         if var == 'archive':
             app.controllers.mailbox.archive(self)
-        elif var == 'show_mail':
+        elif self.is_active and var == 'show_mail':
             app.controllers.mailbox.show_all_mail(self)
-        elif var == 'hide_mail':
+            if not self.is_archived:
+                app.controllers.mailbox.archive(self)
+        elif self.is_active and var == 'hide_mail':
+            self.is_archived = False
             app.controllers.mailbox.hide_all_mail(self)
 
     def get_gmail_service(self):
@@ -229,11 +238,14 @@ class Inbox(db.Model):
         db.session.commit()
 
     def inactivate(self, commit=True):
+        app.controllers.mailbox.show_all_mail(self)
         self.is_active = False
+        self.is_archived = False
         if commit:
             db.session.commit()
 
     def activate(self, commit=True):
+        logger.debug('activating inbox %s' % self.email)
         app.queue.queues.IQ.get_queue().enqueue(
             manage_inbox_queue, ('inbox', self.id, 'archive'))
 

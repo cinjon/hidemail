@@ -13,8 +13,12 @@ flask_app.config.from_object('config')
 flask_app.debug = config.debug
 db = SQLAlchemy(flask_app)
 Mobility(flask_app)
+stripe_sk = config.STRIPE_TEST_SK
+stripe_pk = config.STRIPE_TEST_PK
 if not flask_app.debug:
     sslify = SSLify(flask_app)
+    stripe_pk = config.STRIPE_LIVE_PK
+    stripe_sk = config.STRIPE_LIVE_SK
 
 import models
 import queue

@@ -40,6 +40,8 @@ X 15. SSL
 17. Error Reporting to Users
 18. Using my own account.
 X 19. FAQ
+20. Cron nightly to archive old email
+21. Fix UserData saving
 
 What's necessary to pushing it out to people? 1,2,3,4
 What's necessary to getting people to apy for it? 5,7

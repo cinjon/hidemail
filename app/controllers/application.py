@@ -11,7 +11,6 @@ from flask import g, send_from_directory, make_response, request, redirect, rend
 from sqlalchemy.sql.expression import func, select
 from flask.ext.mobility.decorators import mobile_template
 
-stripe_handler = app.controllers.stripe_handler.StripeHandler()
 logger = app.flask_app.logger
 
 # special file handlers and error handlers
@@ -135,6 +134,10 @@ def align_customer_with_inbox(inbox, customer):
             app.db.session.commit()
     return customer
 
+@app.flask_app.route('/get-stripe-pk', methods=['GET'])
+def get_stripe_pk():
+    return jsonify(success=True, stripe_pk=app.stripe_pk)
+
 #TODO: obfuscate the id?
 @app.flask_app.route('/api/get-time-info/<customer_id>', methods=['GET'])
 def get_time_info(customer_id):
@@ -207,45 +210,38 @@ def post_payment():
     if not customer:
         return jsonify(success=False, error='request_fail')
 
-    try:
-        account_type = account_types[selection]
-        if account_type == account_types['monthly']:
-            return buy_subscription(customer, token)
-        else:
-            return buy_trial(customer, token)
-    except Exception, e:
-        logger.debug('Error with stripe call for customer %d and selection %s: %s' % (customer.id, selection, e))
-        return jsonify(success=False, error='payment_error')
+    account_type = account_types[selection]
+    if account_type == account_types['monthly']:
+        return buy_subscription(customer, token)
+    else:
+        return buy_trial(customer, token)
 
 def buy_trial(customer, token):
-    stripe_customer_id = customer.stripe_customer_id
-    if not stripe_customer_id:
-        description='%s - %s' % (customer.name, customer.id)
-        card=token.get('id')
-        stripe_customer = stripe_handler.create_customer(
-            card=card, description=description)
-        if not stripe_customer['success']:
-            return stripe_customer
-        stripe_customer_id = stripe_customer['id']
+    # Right now, this is set up in such a way that each transaction should be considered a new customer. So reset the stripe_customer_id each time.
+    handler = app.controllers.stripe_handler.StripeHandler()
+    description = '%s - %s' % (customer.name, customer.id)
+    card = token.get('id')
+    stripe_customer = handler.create_customer(card=card, description=description)
+    if not stripe_customer['success']:
+        return jsonify(success=False, errorType=stripe_customer['errorType'])
+    stripe_customer_id = stripe_customer['id']
 
     customer.set_stripe_id(stripe_customer_id)
     amount = account_costs['trial']*100
-    charge = stripe_handler.charge(amount=amount, currency='usd',
-                                   stripe_customer_id=stripe_customer_id)
+    charge = handler.charge(amount=amount, currency='usd', stripe_customer_id=stripe_customer_id)
+
     if not charge['success']:
-        return charge
+        return jsonify(success=False, errorType=charge['errorType'])
     return _complete_purchase(customer, 'trial', amount)
 
 def buy_subscription(customer, token):
-    stripe_customer_id = customer.stripe_customer_id
-    if not stripe_customer_id:
-        description = '%s' % customer.name
-        stripe_customer = stripe_handler.create_customer(
-            card=card, description=description, plan='monthly')
-        if not stripe_customer['success']:
-            return stripe_customer
-        stripe_customer_id = stripe_customer['id']
-
+    handler = app.controllers.stripe_handler.StripeHandler()
+    description = '%s' % customer.name
+    card = token.get('id')
+    stripe_customer = handler.create_customer(card=card, description=description, plan='monthly')
+    if not stripe_customer['success']:
+        return jsonify(success=False, errorType=stripe_customer['errorType'])
+    stripe_customer_id = stripe_customer['id']
     customer.set_stripe_id(stripe_customer_id)
     return _complete_purchase(customer, 'monthly', account_costs['monthly']*100)
 

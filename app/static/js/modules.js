@@ -5,6 +5,13 @@ var stripeTestPK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
 var stripeLivePK = 'pk_live_puq7AjfvQJkAfND9Ddmghww1'
 var stripePK = stripeLivePK
 var accountTypes = {0:'Inactive', 1:'Free', 2:'Subscription', 3:'Week Trial'}
+var errorMessages = {
+  'stripe_invalid_parameters':"Sorry. There was an error processing your card. Please try again.",
+  'stripe_auth_fail':"Sorry. We had trouble connecting to Stripe. Please try again.",
+  'stripe_network_fail':"Sorry. We had trouble connecting to Stripe's network. Please try again.",
+  'stripe_failed':"Sorry. There was an error handling your card. Please try again.",
+  'stripe_maybe_not':"Sorry. We hit an error completing the payment. Please try again."
+}
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
   .controller('navBar', function($scope, $http, $auth, $location, LocalStorage, UserData) {
@@ -12,9 +19,8 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       $scope.user = newValue;
     }, true)
 
-    getUser(LocalStorage, $http, $auth, function(user) {
+    getUser(UserData, $http, $auth, function(user) {
       $scope.user = user;
-      UserData.setUser(user)
     });
 
     $scope.go = function(path) {
@@ -37,8 +43,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     })
 
     $scope.logout = function() {
-      $scope.user = null;
-      LocalStorage.remove(lsKey);
+      UserData.setUser(null)
       $auth.logout();
     }
 
@@ -54,22 +59,22 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
       $auth.authenticate('google', {'state':state}).then(function(response) {
         if (response.data.success) {
-          $scope.user = response.data.user;
-          LocalStorage.set(lsKey, $scope.user)
-          UserData.setUser($scope.user)
-          if ($scope.user.isActive) {
+          var user = response.data.user;
+          UserData.setUser(user);
+          if (user.isActive) {
             $scope.go('/me')
           } else {
             $scope.go('/plans')
           }
         } else {
-          console.log('Failed to authenticate.');
+          console.log('Failed to authenticate.'); //Report to user
         }
       })
     }
   })
-  .controller('home', function($scope, $http, $auth, $location, LocalStorage) {
-    getUser(LocalStorage, $http, $auth, function(user) {
+  .controller('home', function($scope, $http, $auth, $location, UserData) {
+    getUser(UserData, $http, $auth, function(user) {
+      UserData.setUser(user);
       $scope.user = user;
     });
 
@@ -83,70 +88,103 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     ]
   })
   .controller('plans', function($scope, $http, $auth, $location, LocalStorage, Post, UserData) {
+    $scope.alert = null;
+
+    $http.get('/get-stripe-pk').then(function(response) {
+      $scope.handler = StripeCheckout.configure({
+        key: response.data.stripe_pk,
+        //       image: '/make-some-image.png,
+        token: function(token) {
+          token['selection'] = $scope.selection
+          token['customer_id'] = $scope.user.customer_id
+          Post.postPayment(token).then(function(response) {
+            var data = response.data;
+            if (data.success) {
+              setUser(data.user);
+              $location.path('/me')
+            } else {
+              $scope.alert = {'message':errorMessages[data.errorType], 'type':'danger'}
+              if (!$scope.alert.message) {
+                $scope.alert.message = 'Sorry. ' + data.errorType + ' Please try again.'
+              }
+            }
+          });
+        }
+      });
+    })
+
     var setUser = function(user) {
-      LocalStorage.set(lsKey, user);
       $scope.user = user;
       UserData.setUser(user);
     }
 
-    getUser(LocalStorage, $http, $auth, function(user) {
+    getUser(UserData, $http, $auth, function(user) {
+      console.log('in plans this is the user')
+      console.log(user)
       setUser(user);
     })
 
     $scope.plans = [
       {
         selection:'monthly',
-        description:'Monthly Subscription', price:1000,
+        description:'Monthly Subscription', price:500,
         isSubscription:true, period:'month',
         url:'/static/partials/plan.html',
         title:"Monthly Service",
         details:[
-          "Two lattes at Sightglass.",
+          "A latte at Sightglass.",
           "Or focus and deeper thought.",
           "Our Top Choice."
         ]},
       {
         selection:'trial',
-        description:'One Week Trial', price:800,
+        description:'One Week Trial', price:500,
         url:'/static/partials/plan.html',
-        title:"One Week Trial",
+        title:"One Week Red Pill",
         details:[
           "Treat yourself.",
           "A fine beer at Monk's Kettle.",
           "Or the opportunity to flow."
-        ]}]
-
-    var handler = StripeCheckout.configure({
-      key: stripePK,
-//       image: '/make-some-image.png,
-      token: function(token) {
-        token['selection'] = $scope.selection
-        token['customer_id'] = $scope.user.customer_id
-        Post.postPayment(token).then(function(response) {
-          var data = response.data;
-          if (data.success) {
-            setUser(data.user);
-            $location.path('/me')
-          } else {
-            console.log('err, something went wrong.')
-          }
-        });
+        ]
       }
-    });
+    ]
 
     $scope.buy = function(plan) {
+      $scope.closeAlert();
       $scope.selection = plan.selection // Is there a way to add this info to the token?
       var description = plan.description;
       var price = plan.price;
-      handler.open({
+      $scope.handler.open({
         name: 'mailboxFlow',
         description: description,
         amount: price,
         email: $scope.user.inboxes[0].email
       })
     }
+
+    $scope.closeAlert = function() {
+      $scope.alert = null;
+    }
+
+    $scope.oauth = function() {
+      var state = {};
+      state['customer'] = null;
+      state['tzOffset'] = getTzOffset();
+
+      $auth.authenticate('google', {'state':state}).then(function(response) {
+        if (response.data.success) {
+          $scope.user = response.data.user;
+          LocalStorage.set(lsKey, $scope.user)
+          UserData.setUser($scope.user)
+          $location.path('/plans')
+        } else {
+          console.log('Failed to authenticate.');
+        }
+      })
+    }
   })
-  .controller('profile', function($scope, $http, Post, $timeout, $auth, $location, LocalStorage, UserData) {
+  .controller('profile', function($scope, $http, Post, $timeout, $auth, $location, UserData) {
+    console.log('in porfile')
     $scope.introductions = [
       "You can change periods once every three days.",
       "You can change the timezone when you're in a new place."
@@ -161,29 +199,46 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     $timeout(tick, $scope.tickInterval);
 
     $scope.$watch(function() { return UserData.getUser() }, function(newValue) {
-      $scope.user = newValue;
+      if (newValue && !newValue.timeblocks) {
+        console.log('in the watch func')
+        getTimeInfo(newValue)
+      }
     }, true)
 
-    getUser(LocalStorage, $http, $auth, function(user) {
-      if (!user) {
-        $location.path('/')
+    var getTimeInfo = function(user) {
+      if (user) {
+        setTimeInfo(user);
       } else {
-        $scope.user = user;
-        $http.get('/api/get-time-info/' + user.customer_id).then(function(response) {
-          var data = response.data;
-          if (data.success) {
-            setUser(data.user);
+        getUser(UserData, $http, $auth, function(user) {
+          console.log('callback')
+          if (!user) {
+            $location.path('/')
           } else {
-            console.log('err, user time info went wrong.')
+            setTimeInfo(user);
           }
         })
       }
-    });
+    }
+    getTimeInfo(null)
+
+    var setTimeInfo = function(user) {
+      console.log('getting time info')
+      $http.get('/api/get-time-info/' + user.customer_id).then(function(response) {
+        var data = response.data;
+        if (data.success) {
+          console.log(data.user);
+          setUser(data.user);
+        } else {
+          console.log('err, user time info went wrong.') // Report back error
+        }
+      })
+    }
 
     $scope.allInboxes = null;
     var setUser = function(user) {
-      UserData.setUser(user);
+      console.log('profile setting user')
       $scope.user = user;
+      UserData.setUser(user);
       if ($scope.user.inboxes.length > 0) {
         $scope.allInboxes = 'Your Inboxes: ' + $scope.user.inboxes.map(function(inbox) {return inbox.email;}).join(', ');
       } else {
@@ -196,6 +251,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       if ($scope.user.lastTbAdj) {
         $scope.user.lastTbAdj = new Date($scope.user.lastTbAdj)
       }
+      console.log('setting user...')
       setBlocks($scope.user)
     }
 
@@ -225,7 +281,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         if (data.success) {
           setUser(data.user);
         } else {
-          console.log('err, failure in posting timezone');
+          console.log('err, failure in posting timezone'); // report back to user
         }
       })
     }
@@ -264,7 +320,8 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       }
       var time = $scope.user.lastTbAdj
       return !time || is_out_of_range(
-        time, new Date(time - 1000*60*60*24*3), new Date(new Date() - 1000*60*15))
+        time, new Date(new Date() - 1000*60*60*24*3), new Date(new Date() - 1000*60*15)
+      )
     }
     var is_out_of_range = function(time, beg, end) {
       return time < beg || time > end
@@ -318,7 +375,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       {'question':"What happens when I'm in a new timezone?",
        'answer':"Visit your profile and there will be an option to adjust it."},
       {'question':"I have 17,000 emails. Are you really going to hide them all from me?",
-       'answer':"No. We archive everything older than two weeks. Then, we hide your emails from you."},
+       'answer':"No. We archive everything older than two weeks. Then we hide your emails from you."},
       {'question':"Wait, what? How do I find my emails if they're archived?",
        'answer':"Search for them in the top bar. This is probably what you do anyways."},
       {'question':"What if I miss something important?",
@@ -326,9 +383,9 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       {'question':"Why did you make this?",
        'answer':"We made this. No one builds anything alone. I got a lot of help along the way."},
       {'question':"Ok, but really, what was your motivation and does it involve selling my data?",
-       'answer':"I built this because I wanted to free myself from checking my email and more easily settle into a flow when working. I figured others want to as well. I charge for this so that I don't need to sell your data."},
+       'answer':"I built this because I wanted to free myself from constantly checking email and more easily settle into a flow when working. I figured others want that as well. I charge for this so that I don't need to sell your data."},
       {'question':"But couldn't you be selling my data as well?",
-       'answer':"It's possible, but I think that it would be really bad if I was and everyone found out. So I'm not and I feel pretty good about building something that others want to use."}
+       'answer':"It's possible, but I think that it would be really bad if I was and others found out. So I'm not and I feel pretty good about building something that folks want to use."}
       ]
   })
   .config([
@@ -361,15 +418,23 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
   ]);
 
-var getUser = function(LocalStorage, http, auth, callback) {
+var getUser = function(userData, http, auth, callback) {
+  console.log('getting user')
+  var userDataUser = userData.getUser();
+  if (userDataUser) {
+    console.log('userdatauser')
+    console.log(userDataUser)
+    return userDataUser;
+  }
+
   var userToken = auth.getToken()
-  var isSupported = LocalStorage.isSupported()
-  if (userToken && (!isSupported || !LocalStorage.get(lsKey))) {
+  if (userToken) {
     http.get('/api/user-from-token/' + userToken).then(function(response) {
       var data = response.data;
       if (data.success) {
         if (data.user) {
-          LocalStorage.set(lsKey, data.user);
+          console.log('calling user')
+          console.log(data.user);
           callback(data.user);
         } else if (data.token == false) {
           auth.logout()
@@ -379,8 +444,8 @@ var getUser = function(LocalStorage, http, auth, callback) {
         callback(null);
       }
     })
-  } else if (isSupported) {
-    callback(LocalStorage.get(lsKey))
+  } else {
+    callback(null);
   }
 }
 
