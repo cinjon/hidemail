@@ -216,6 +216,11 @@ def post_payment():
     else:
         return buy_trial(customer, token)
 
+@app.flask_app.route('/post-trial', methods=['POST'])
+def post_trial():
+    # free trial, ends after three days
+    pass
+
 def buy_trial(customer, token):
     # Right now, this is set up in such a way that each transaction should be considered a new customer. So reset the stripe_customer_id each time.
     handler = app.controllers.stripe_handler.StripeHandler()
@@ -234,7 +239,26 @@ def buy_trial(customer, token):
         return jsonify(success=False, errorType=charge['errorType'])
     return _complete_purchase(customer, 'trial', amount)
 
+def buy_sabbatical(customer, token):
+    handler = app.controllers.stripe_handler.StripeHandler()
+    description = '%s - %s' % (customer.name, customer.id)
+    card = token.get('id')
+    stripe_customer = handler.create_customer(card=card, description=description)
+    if not stripe_customer['success']:
+        return jsonify(success=False, errorType=stripe_customer['errorType'])
+    stripe_customer_id = stripe_customer['id']
+
+    customer.set_stripe_id(stripe_customer_id)
+    amount = account_costs['break']*100
+    charge = handler.charge(amount=amount, currency='usd',
+                            stripe_customer_id=stripe_customer_id)
+
+    if not charge['success']:
+        return jsonify(success=False, errorType=charge['errorType'])
+    return _complete_purchase(customer, 'break', amount)
+
 def buy_subscription(customer, token):
+    # subscription, monthly
     handler = app.controllers.stripe_handler.StripeHandler()
     description = '%s' % customer.name
     card = token.get('id')
@@ -249,7 +273,14 @@ def _complete_purchase(customer, ty, amount):
     purchase = app.models.create_purchase(
         account_types[ty], amount, commit=False)
     customer.purchases.append(purchase)
+    if ty == 'break':
+        sabbatical = app.models.create_sabbatical(commit=False)
+        customer.sabbaticals.append(sabbatical)
     app.db.session.commit()
+
+##
+#     dont activate here. have a button on the next page
     customer.activate(ty, commit=True)
+##
     return jsonify(success=True, user=customer.serialize())
 

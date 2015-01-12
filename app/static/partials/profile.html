@@ -25,17 +25,17 @@
     </div>
   </div>
 
-  <div class="row timehour" ng-repeat="block in blocks">
+  <div class="row timehour" ng-repeat="block in user.timeblocks">
     <div class="col-xs-4 timeText">
       {{getBlockDescription(block)}}
     </div>
     <div class="col-xs-7 col-xs-offset-1">
-      <select ng-if="canSetTimeblocks()" class="form-control timeChoice timeSelect" ng-model="block.time"
-              ng-options="time for time in getAvailableTimes(block.time)" ng-change="updateBlocks()">
+      <select ng-if="canSetTimeblocks()" class="form-control timeChoice timeSelect" ng-model="block.start"
+              ng-options="time for time in getAvailableTimes(block.start)" ng-change="updateBlocks()">
       </select>
       <button ng-if="!canSetTimeblocks()" class="btn btn-sm btn-white timeChoice"
               ng-disabled="true">
-        {{block.time}}
+        {{blockToTime(block)}}
       </button>
     </div>
   </div>

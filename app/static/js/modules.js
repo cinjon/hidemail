@@ -5,13 +5,6 @@ var stripeTestPK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
 var stripeLivePK = 'pk_live_puq7AjfvQJkAfND9Ddmghww1'
 var stripePK = stripeLivePK
 var accountTypes = {0:'Inactive', 1:'Free', 2:'Subscription', 3:'Week Trial'}
-var errorMessages = {
-  'stripe_invalid_parameters':"Sorry. There was an error processing your card. Please try again.",
-  'stripe_auth_fail':"Sorry. We had trouble connecting to Stripe. Please try again.",
-  'stripe_network_fail':"Sorry. We had trouble connecting to Stripe's network. Please try again.",
-  'stripe_failed':"Sorry. There was an error handling your card. Please try again.",
-  'stripe_maybe_not':"Sorry. We hit an error completing the payment. Please try again."
-}
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
   .controller('navBar', function($scope, $http, $auth, $location, LocalStorage, UserData) {
@@ -20,6 +13,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }, true)
 
     getUser(UserData, $http, $auth, function(user) {
+      'navbar doing getuser'
       $scope.user = user;
     });
 
@@ -72,12 +66,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       })
     }
   })
-  .controller('home', function($scope, $http, $auth, $location, UserData) {
-    getUser(UserData, $http, $auth, function(user) {
-      UserData.setUser(user);
-      $scope.user = user;
-    });
-
+  .controller('home', function($scope) {
     $scope.introductions = [
       "We accomplish quality work when we reach a state of flow.",
       "Today's connectedness can make this difficult."
@@ -103,10 +92,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
               setUser(data.user);
               $location.path('/me')
             } else {
-              $scope.alert = {'message':errorMessages[data.errorType], 'type':'danger'}
-              if (!$scope.alert.message) {
-                $scope.alert.message = 'Sorry. ' + data.errorType + ' Please try again.'
-              }
+              $scope.alert = {'message':data.errorType, 'type':'danger'}
             }
           });
         }
@@ -124,42 +110,61 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       setUser(user);
     })
 
+    var planHtml = '/static/partials/plan.html';
     $scope.plans = [
       {
+        url:planHtml,
         selection:'monthly',
-        description:'Monthly Subscription', price:500,
+        description:'Monthly Subscription', price:1000,
         isSubscription:true, period:'month',
-        url:'/static/partials/plan.html',
         title:"Monthly Service",
         details:[
-          "A latte at Sightglass.",
+          "Two lattes at Sightglass.",
           "Or focus and deeper thought.",
+          "Includes email breaks.",
           "Our Top Choice."
-        ]},
+        ]
+      },
       {
-        selection:'trial',
-        description:'One Week Trial', price:500,
-        url:'/static/partials/plan.html',
-        title:"One Week Red Pill",
+        url:planHtml,
+        selection:'break',
+        description:'Email Break', price:500,
+        title:"Take a break. Recharge.",
         details:[
+          "Are you on vacation?",
           "Treat yourself.",
           "A fine beer at Monk's Kettle.",
-          "Or the opportunity to flow."
+          "Or an opportunity to let go."
+        ]
+      },
+      {
+        url:planHtml,
+        selection:'trial',
+        description:'Three Day Trial', price:0,
+        title:"Three Day Red Pill",
+        details:[
+          "Free trial.",
+          "Come on board.",
+          "The water's warm."
         ]
       }
     ]
 
     $scope.buy = function(plan) {
       $scope.closeAlert();
-      $scope.selection = plan.selection // Is there a way to add this info to the token?
-      var description = plan.description;
-      var price = plan.price;
-      $scope.handler.open({
-        name: 'mailboxFlow',
-        description: description,
-        amount: price,
-        email: $scope.user.inboxes[0].email
-      })
+      if (plan.selection == 'trial') {
+        Post.postTrial($scope.user.customer_id)
+      } else {
+        $scope.selection = plan.selection // Is there a way to add this info to the token?
+        var description = plan.description;
+        var price = plan.price;
+        $scope.handler.open({
+          name: 'mailboxFlow',
+          description: description,
+          amount: price,
+          email: $scope.user.inboxes[0].email
+        })
+      }
     }
 
     $scope.closeAlert = function() {
@@ -219,10 +224,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         })
       }
     }
-    getTimeInfo(null)
+    getTimeInfo($scope.user)
 
     var setTimeInfo = function(user) {
-      console.log('getting time info')
+      console.log('profile getting time info')
       $http.get('/api/get-time-info/' + user.customer_id).then(function(response) {
         var data = response.data;
         if (data.success) {
@@ -236,7 +241,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     $scope.allInboxes = null;
     var setUser = function(user) {
-      console.log('profile setting user')
       $scope.user = user;
       UserData.setUser(user);
       if ($scope.user.inboxes.length > 0) {
@@ -251,27 +255,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       if ($scope.user.lastTbAdj) {
         $scope.user.lastTbAdj = new Date($scope.user.lastTbAdj)
       }
-      console.log('setting user...')
-      setBlocks($scope.user)
-    }
-
-    var setBlocks = function(user) {
-      $scope.blocks = user.timeblocks.map(function(block) {
-        var period = 'pm'
-        var length = block.length
-        var hour = parseInt(block.start)/60
-        if (hour < 12) {
-          period = 'am'
-        }
-        if (hour > 12) {
-          hour = hour - 12;
-        }
-        if (hour == 0) {
-          hour = 12;
-        }
-        return {'length':length, 'time':hour + ' ' + period}
-      })
-      $scope.times = $scope.blocks.map(function(block) { return block.time })
     }
 
     $scope.setTimezone = function() {
@@ -329,14 +312,33 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     $scope.getBlockDescription = function(block) {
       if ($scope.canSetTimeblocks()) {
-        return 'Select to change period ' + ($scope.blocks.indexOf(block) + 1) + ':'
+        return 'Select to change period ' + ($scope.user.timeblocks.indexOf(block) + 1) + ':'
       } else {
         return 'Period start time:'
       }
     }
 
-    $scope.getAvailableTimes = function(blockTime) {
-      return allTimes.filter(function(time) { return time == blockTime || $scope.times.indexOf(time) == -1 })
+    $scope.getAvailableTimes = function(blockStart) {
+      var currentOtherTimes = $scope.user.timeblocks
+        .filter(function(block) { return block.start != blockStart })
+        .map(function(block) { return $scope.blockToTime(block) })
+      return allTimes.filter(function(time) { return currentOtherTimes.indexOf(time) == -1 });
+    }
+
+    $scope.blockToTime = function(block) {
+      var period = 'pm'
+      var length = block.length
+      var hour = parseInt(block.start)/60
+      if (hour < 12) {
+        period = 'am'
+      }
+      if (hour > 12) {
+        hour = hour - 12;
+      }
+      if (hour == 0) {
+        hour = 12;
+      }
+      return hour + ' ' + period
     }
 
     $scope.updateBlocks = function() {
@@ -374,6 +376,8 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
        'answer':"Change them. You can do this once every three days."},
       {'question':"What happens when I'm in a new timezone?",
        'answer':"Visit your profile and there will be an option to adjust it."},
+      {'question':"What email clients do you support?",
+       'answer':"Only Gmail at the moment."},
       {'question':"I have 17,000 emails. Are you really going to hide them all from me?",
        'answer':"No. We archive everything older than two weeks. Then we hide your emails from you."},
       {'question':"Wait, what? How do I find my emails if they're archived?",

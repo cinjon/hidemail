@@ -36,12 +36,21 @@ X 12. Add Stripe Subscription.
 X 13. Think through the flow, maybe add an activate button after signing up and paying. --> No activate button. Once you pay, you are activated.
 X 14. Email account - cinjon@mailboxflow.com
 X 15. SSL
-16. Stripe Tests
+X 16. Stripe Tests
 17. Error Reporting to Users
 18. Using my own account.
 X 19. FAQ
-20. Cron nightly to archive old email
+X 20. Cron nightly to archive old email --> Fixed this by doing it at point of show / hide mail
 21. Fix UserData saving
+22. Time selection:
+    - Change the user creation to not make timeblocks
+    - Instead have timeblocks be a string model, e.g "9,10,11,12,18,19,20"
+    - Parse it on the client's side and show it on a calendar set.
+23. Can change the set of times and then press save to save them.
+24. Need an activate button once you have an acceptable account (free, trial, monthly, break)
+25. Instructions on how to use the calendar
+26. Option to take a sabbatical --> need a start date and end date.
+27. Need a nightly cron that checks for people ending sabbaticals and trials. --> Can do this with APScheduler
 
 What's necessary to pushing it out to people? 1,2,3,4
 What's necessary to getting people to apy for it? 5,7

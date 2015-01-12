@@ -13,8 +13,16 @@ from oauth2client.client import Credentials
 logger = app.flask_app.logger
 
 time_period_change = 3 # days
-account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3}
-account_costs = {'inactive':0, 'free':0, 'monthly':10, 'trial':8}
+
+#######
+# Inactives are people who have signed up but aren't free, aren't trial, and aren't paying.
+# Free are people with free accounts... Me.
+# Monthly is people with a subscription.
+# Trial are people on a trial. They can only do one.
+# Break are people who are using it as a sabbatical. They can do as many as they want.
+account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3, 'break':4}
+account_costs = {'inactive':0, 'free':0, 'monthly':10, 'trial':0, 'break':5}
+#######
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple): # obj: (ty, id, var)
@@ -47,17 +55,45 @@ def create_purchase(account_type, amount, commit=True):
         db.session.commit()
     return purchase
 
+class Sabbatical(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    creation_time = db.Column(db.DateTime) # time of purchase
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), index=True)
+    start_time = db.Column(db.DateTime) # time of start
+    length = db.Column(db.Integer) # in days, up to 14
+
+    def __init__(self):
+        self.creation_time = app.utility.get_time()
+
+    def set_start_time(self, start_time, commit=True):
+        self.start_time = start_time
+        if commit:
+            db.session.commit()
+
+    def set_length(self, length, commit=True):
+        self.length = length
+        if commit:
+            db.session.commit()
+
+def create_sabbatical(commit=True):
+    sabbatical = Sabbatical()
+    db.session.add(sabbatical)
+    if commit:
+        db.session.commit()
+    return sabbatical
+
 class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     creation_time = db.Column(db.DateTime)
     name = db.Column(db.Text)
-    last_checked_time = db.Column(db.DateTime) # for the workers to check when they last saw an inbox
+    last_checked_time = db.Column(db.DateTime) # last time a worker checked
     stripe_customer_id = db.Column(db.Text)
     account_type = db.Column(db.Integer) # See Account Types
     last_timezone_adj_time = db.Column(db.DateTime)
     last_timeblock_adj_time = db.Column(db.DateTime)
     inboxes = db.relationship('Inbox', backref='customer', lazy='dynamic')
     purchases = db.relationship('Purchase', backref='customer', lazy='dynamic')
+    sabbaticals = db.relationship('Sabbatical', backref='customer', lazy='dynamic')
     timeblocks = db.relationship('Timeblock', backref='inbox', lazy='dynamic')
     timezones = db.relationship('Timezone', backref='customer', lazy='dynamic')
 
@@ -84,7 +120,8 @@ class Customer(db.Model):
             inbox.inactivate(commit=False)
         self.account_type = account_types['inactive']
 
-        # Reset timeblocks to be a week ago.
+        # Reset timeblocks to be a week ago so that when they reactivate, all is ok.
+        # This is a shitty hack. Come up with a better model.
         now = app.utility.get_time()
         self.last_timezone_adj_time = now - datetime.timedelta(days=7)
         self.last_timeblock_adj_time = now - datetime.timedelta(days=7)

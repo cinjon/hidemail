@@ -20,6 +20,12 @@ angular.module('hidemailServices', ['ngRoute', 'ngResource', 'LocalStorageModule
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
           data: {'token':token}
         })
+      },
+      postTrial: function(customer_id) {
+        return $http.post('/post-trial', {
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          data: {'token':token}
+        })
       }
     }
   })
