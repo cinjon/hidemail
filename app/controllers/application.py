@@ -153,6 +153,8 @@ def update_blocks():
     if not customer or not customer.is_tb_adjust():
         return jsonify(success=False)
 
+    for block in customer.get_timeblocks():
+        block.is_active = False
     for block in payload['timeblocks']:
         customer.set_timeblock(int(block['start']), int(block['length']), commit=False)
 
@@ -176,6 +178,17 @@ def update_timezone():
     customer.last_timezone_adj_time = now
     customer.last_checked_time = now
 
+    app.db.session.commit()
+    return jsonify(success=True, user=customer.serialize())
+
+@app.flask_app.route('/activate-account', methods=['POST'])
+def update_timezone():
+    payload = request.json['data']
+    customer = app.models.Customer.query.get(int(payload['customer_id']))
+    if not customer:
+        return jsonify(success=False)
+
+    customer.activate() # what shte flow around apyment???
     app.db.session.commit()
     return jsonify(success=True, user=customer.serialize())
 
@@ -277,10 +290,4 @@ def _complete_purchase(customer, ty, amount):
         sabbatical = app.models.create_sabbatical(commit=False)
         customer.sabbaticals.append(sabbatical)
     app.db.session.commit()
-
-##
-#     dont activate here. have a button on the next page
-    customer.activate(ty, commit=True)
-##
     return jsonify(success=True, user=customer.serialize())
-

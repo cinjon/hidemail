@@ -52,9 +52,6 @@ X 20. Cron nightly to archive old email --> Fixed this by doing it at point of s
 26. Option to take a sabbatical --> need a start date and end date.
 27. Need a nightly cron that checks for people ending sabbaticals and trials. --> Can do this with APScheduler
 
-What's necessary to pushing it out to people? 1,2,3,4
-What's necessary to getting people to apy for it? 5,7
 
 Later:
 - Add in the replies saying "hey this person isn't going to see the email for a while. If this is urgent, you can push it through now by pressing this button."
-- Add in a whitelist of people who def get through.

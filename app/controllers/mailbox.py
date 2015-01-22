@@ -28,7 +28,7 @@ def _get_thread_ids_from_label(inbox, label, q=None):
             response = service.users().threads().list(
                 userId=inbox.email, labelIds=[label], q=q,
                 pageToken=response['nextPageToken']).execute()
-        except Exception, e: # this should be a 429 or something. unsure what exactly.
+        except Exception, e: # this should be a 429 or something. unsure what exactly. dirty hack.
             time.sleep(backoff)
             backoff = backoff * 2
     thread_ids.extend([t['id'] for t in response.get('threads', [])])

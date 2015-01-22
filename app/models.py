@@ -5,14 +5,13 @@ import os
 import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import desc
-
 import httplib2
 from apiclient.discovery import build
 from oauth2client.client import Credentials
 
 logger = app.flask_app.logger
 
-time_period_change = 3 # days
+time_period_change = 1 # days
 
 #######
 # Inactives are people who have signed up but aren't free, aren't trial, and aren't paying.
@@ -151,7 +150,7 @@ class Customer(db.Model):
             return True
         now = app.utility.get_time()
         time = self.last_timeblock_adj_time
-        return not time or _is_out_of_range(time, now - datetime.timedelta(time_period_change), now - datetime.timedelta(minutes=15))
+        return not time or time < now - datetime.timedelta(time_period_change)
 
     def set_timezone(self, offset, commit=True):
         timezone = create_timezone(offset, not commit)
@@ -170,7 +169,7 @@ class Customer(db.Model):
         return self.timezones.order_by(desc(Timezone.creation_time)).first()
 
     def get_timeblocks(self):
-        return self.timeblocks.order_by(desc(Timeblock.creation_time)).limit(2)
+        return self.timeblocks.filter_by(is_active=True)
 
     def get_timeblock_periods(self):
         ret = []
@@ -185,6 +184,8 @@ class Customer(db.Model):
         self.set_timezone(offset=tz_offset, commit=commit)
 
     def setup_tb_on_arrival(self, commit=True):
+        for block in self.get_timeblocks():
+            block.is_active = False
         self.set_timeblock(start_time=8*60, length=60, commit=False)
         self.set_timeblock(start_time=17*60, length=60, commit=False)
         if commit:
@@ -216,9 +217,6 @@ class Customer(db.Model):
         ret['timeblocks'] = sorted([tb.serialize() for tb in self.get_timeblocks()],
                                    key=lambda k:k['start'])
         return ret
-
-def _is_out_of_range(time, beg, end):
-    return time < beg or time > end
 
 class Inbox(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -348,11 +346,13 @@ class Timeblock(db.Model):
     length = db.Column(db.Integer) # in minutes
     start_time = db.Column(db.Integer) # minutes since the day started
     creation_time = db.Column(db.DateTime)
+    is_active = db.Column(db.Boolean)
 
     def __init__(self, length, start_time):
         self.length = length
         self.start_time = start_time
         self.creation_time = app.utility.get_time()
+        self.is_active = True
 
     def serialize(self):
         return {'start':self.start_time, 'length':self.length}
@@ -387,6 +387,3 @@ def mins_to_datetime(minutes, offset=None):
     if offset:
         now -= datetime.timedelta(minutes=offset)
     return datetime.datetime(now.year, now.month, now.day, int(minutes / 60))
-
-
-

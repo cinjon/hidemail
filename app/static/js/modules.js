@@ -1,19 +1,17 @@
 'use strict';
 
-var lsKey = 'localmbxflow';
 var stripeTestPK = 'pk_test_gLDeXwxIEjBhEpHwSlpE25T0'
 var stripeLivePK = 'pk_live_puq7AjfvQJkAfND9Ddmghww1'
-var stripePK = stripeLivePK
+var stripePK = stripeTestPK
 var accountTypes = {0:'Inactive', 1:'Free', 2:'Subscription', 3:'Week Trial'}
 
 angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailFilters', 'angular-loading-bar', 'satellizer'])
-  .controller('navBar', function($scope, $http, $auth, $location, LocalStorage, UserData) {
+  .controller('navBar', function($scope, $http, $auth, $location, UserData) {
     $scope.$watch(function() { return UserData.getUser() }, function(newValue) {
       $scope.user = newValue;
     }, true)
 
     getUser(UserData, $http, $auth, function(user) {
-      'navbar doing getuser'
       $scope.user = user;
     });
 
@@ -76,7 +74,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       "At all other times, it hides your inbox. From all devices."
     ]
   })
-  .controller('plans', function($scope, $http, $auth, $location, LocalStorage, Post, UserData) {
+  .controller('plans', function($scope, $http, $auth, $location, Post, UserData) {
     $scope.alert = null;
 
     $http.get('/get-stripe-pk').then(function(response) {
@@ -105,8 +103,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     getUser(UserData, $http, $auth, function(user) {
-      console.log('in plans this is the user')
-      console.log(user)
       setUser(user);
     })
 
@@ -179,7 +175,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       $auth.authenticate('google', {'state':state}).then(function(response) {
         if (response.data.success) {
           $scope.user = response.data.user;
-          LocalStorage.set(lsKey, $scope.user)
           UserData.setUser($scope.user)
           $location.path('/plans')
         } else {
@@ -189,9 +184,8 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
   })
   .controller('profile', function($scope, $http, Post, $timeout, $auth, $location, UserData) {
-    console.log('in porfile')
     $scope.introductions = [
-      "You can change periods once every three days.",
+      "You can change periods once every 24 hours.",
       "You can change the timezone when you're in a new place."
     ]
 
@@ -205,7 +199,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
 
     $scope.$watch(function() { return UserData.getUser() }, function(newValue) {
       if (newValue && !newValue.timeblocks) {
-        console.log('in the watch func')
         getTimeInfo(newValue)
       }
     }, true)
@@ -215,7 +208,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         setTimeInfo(user);
       } else {
         getUser(UserData, $http, $auth, function(user) {
-          console.log('callback')
           if (!user) {
             $location.path('/')
           } else {
@@ -227,11 +219,9 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     getTimeInfo($scope.user)
 
     var setTimeInfo = function(user) {
-      console.log('profile getting time info')
       $http.get('/api/get-time-info/' + user.customer_id).then(function(response) {
         var data = response.data;
         if (data.success) {
-          console.log(data.user);
           setUser(data.user);
         } else {
           console.log('err, user time info went wrong.') // Report back error
@@ -302,12 +292,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         return false;
       }
       var time = $scope.user.lastTbAdj
-      return !time || is_out_of_range(
-        time, new Date(new Date() - 1000*60*60*24*3), new Date(new Date() - 1000*60*15)
-      )
-    }
-    var is_out_of_range = function(time, beg, end) {
-      return time < beg || time > end
+      return !time || time < new Date(new Date() - 1000*60*60*24*3);
     }
 
     $scope.getBlockDescription = function(block) {
@@ -316,13 +301,6 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       } else {
         return 'Period start time:'
       }
-    }
-
-    $scope.getAvailableTimes = function(blockStart) {
-      var currentOtherTimes = $scope.user.timeblocks
-        .filter(function(block) { return block.start != blockStart })
-        .map(function(block) { return $scope.blockToTime(block) })
-      return allTimes.filter(function(time) { return currentOtherTimes.indexOf(time) == -1 });
     }
 
     $scope.blockToTime = function(block) {
@@ -339,6 +317,27 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         hour = 12;
       }
       return hour + ' ' + period
+    }
+
+    $scope.toggleBlock = function(block) {
+      var index = $scope.user.timeblocks.map(function(userBlock) { return userBlock.start }).indexOf(block.num);
+      if (index > -1) {
+        $scope.user.timeblocks.splice(index, 1);
+      } else {
+        $scope.user.timeblocks.push({'start':block.num, 'length':60});
+      }
+      console.log($scope.user.timeblocks);
+    }
+
+    $scope.activateAccount = function() {
+      Post.postActivate($scope.user.customer_id).then(function(response) {
+        var data = response.data;
+        if (data.success) {
+          setUser(data.user);
+        } else {
+          console.log('err, failure in posting blocks');
+        }
+      })
     }
 
     $scope.updateBlocks = function() {
@@ -369,11 +368,22 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         }
       })
     }
+
+    $scope.calendarColumns = [allBlockChoices.slice(0,6), allBlockChoices.slice(6,12), allBlockChoices.slice(12,18), allBlockChoices.slice(18,24)]
+    $scope.isUserBlock = function(calendarBlock) {
+      if (!$scope.user) {
+        return false;
+      }
+      return $scope.user.timeblocks.some(function(block) {
+        return calendarBlock.num == block.start
+      })
+    }
+
   })
   .controller('faq', function($scope) {
     $scope.faq = [
       {'question':"What if I don't like the time periods I choose?",
-       'answer':"Change them. You can do this once every three days."},
+       'answer':"Change them. You can do this once every 24 hours."},
       {'question':"What happens when I'm in a new timezone?",
        'answer':"Visit your profile and there will be an option to adjust it."},
       {'question':"What email clients do you support?",
@@ -423,11 +433,8 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
   ]);
 
 var getUser = function(userData, http, auth, callback) {
-  console.log('getting user')
   var userDataUser = userData.getUser();
   if (userDataUser) {
-    console.log('userdatauser')
-    console.log(userDataUser)
     return userDataUser;
   }
 
@@ -437,8 +444,6 @@ var getUser = function(userData, http, auth, callback) {
       var data = response.data;
       if (data.success) {
         if (data.user) {
-          console.log('calling user')
-          console.log(data.user);
           callback(data.user);
         } else if (data.token == false) {
           auth.logout()
@@ -465,30 +470,29 @@ var redirectIfNotArgs = function(params, $location) {
   }
 }
 
-var numToWords = function(num) {
-  if (num == 60) {
-    return 'Sixty';
-  }
-}
-
-function getAllTimes() {
-  var allHours = [12].concat(Array.apply(null, Array(11)).map(function (_, i) { return i+1 }));
-  var temp = allHours.map(function(hour) { return hour.toString() + ' am' }).concat(allHours.map(function(hour) { return hour.toString() + ' pm' }));
-  var ret = [];
-  for (var index = 0; index < temp.length; index++) {
-    var firstValue = temp[index];
-    var secondIndex = index + 1;
-    if (secondIndex == temp.length) {
-      secondIndex = 0;
-    }
-    var secondValue = temp[secondIndex];
-    ret.push(firstValue + " - " + secondValue);
+var allHours = [12].concat(Array.apply(null, Array(11)).map(function (_, i) { return i+1 }));
+var allTimes = allHours.map(function(hour) {
+  var ret = {'strHour':hour.toString() + ' am', 'numHour':hour*60}
+  if (hour == 12) {
+    ret['numHour'] = 0;
   }
   return ret;
-}
-// var allTimes = getAllTimes();
-var allHours = [12].concat(Array.apply(null, Array(11)).map(function (_, i) { return i+1 }));
-var allTimes = allHours.map(function(hour) { return hour.toString() + ' am' }).concat(allHours.map(function(hour) { return hour.toString() + ' pm' }));
+}).concat(
+  allHours.map(function(hour) {
+    var ret = {'strHour':hour.toString() + ' pm', 'numHour':hour*60}
+    if (hour < 12) {
+      ret['numHour'] += 12*60;
+    }
+    return ret
+  })
+);
+var allBlockChoices = allTimes.map(function(time, index) {
+  if (index == 23) {
+    return {'start':time.strHour, 'end':allTimes[0].strHour, 'num':time.numHour}
+  } else {
+    return {'start':time.strHour, 'end':allTimes[index+1].strHour, 'num':time.numHour}
+  }
+})
 
 window.mobilecheck = function() {
   var check = false;

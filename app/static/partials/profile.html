@@ -12,31 +12,46 @@
 </div>
 
 <div class="timeChanges">
-  <div class="row timezone">
-    <div class="col-xs-4 timeText">
-      {{getTimezoneDesc()}}
+  <div class="row">
+    <div class="col-xs-12 introduction">
+      Green times are when your email is visible.
     </div>
-    <div class="col-xs-7 col-xs-offset-1">
-      <button class="btn btn-sm btn-white timeChoice"
-              ng-disabled="!canSetTimezone()" ng-click="setTimezone()"
-              ng-class="{btnHover:canSetTimezone()}">
-        {{clock | date:'shortTime' | lowercase}}, gmt {{timezoneOffset()}}
+  </div>
+  <div class="col-xs-12 col-md-3" ng-repeat="calendarColumn in calendarColumns">
+    <div class="row" ng-repeat="calendarBlock in calendarColumn">
+      <button ng-disabled="!canSetTimeblocks()" class="btn btn-sm timeChoice"
+              ng-class="{'btn-success':isUserBlock(calendarBlock),
+              'btn-white':!isUserBlock(calendarBlock)}" ng-click="toggleBlock(calendarBlock)">
+{{calendarBlock.start}} - {{calendarBlock.end}}
       </button>
     </div>
   </div>
+</div>
 
-  <div class="row timehour" ng-repeat="block in user.timeblocks">
-    <div class="col-xs-4 timeText">
-      {{getBlockDescription(block)}}
-    </div>
-    <div class="col-xs-7 col-xs-offset-1">
-      <select ng-if="canSetTimeblocks()" class="form-control timeChoice timeSelect" ng-model="block.start"
-              ng-options="time for time in getAvailableTimes(block.start)" ng-change="updateBlocks()">
-      </select>
-      <button ng-if="!canSetTimeblocks()" class="btn btn-sm btn-white timeChoice"
-              ng-disabled="true">
-        {{blockToTime(block)}}
+<div class="timeChanges">
+  <div class="row">
+    <div class="col-xs-12 col-md-6">
+      <button class="btn btn-sm btn-white timezone" style="width:100%"
+              ng-disabled="!canSetTimezone()" ng-click="setTimezone()"
+              ng-class="{btnHover:canSetTimezone()}">
+        {{getTimezoneDesc()}} {{clock | date:'shortTime' | lowercase}}, gmt {{timezoneOffset()}}
       </button>
+    </div>
+    <div class="col-xs-12 col-md-3">
+      <div class="row">
+        <button class="btn btn-sm btn-white timezone"
+                ng-disabled="!canSetTimeblocks()" ng-click="submitTimeblocks()">
+          Submit Changes
+        </button>
+      </div>
+    </div>
+    <div class="col-xs-12 col-md-3">
+      <div class="row">
+        <button class="btn btn-sm btn-white timezone"
+                ng-disabled="user.isActive" ng-click="activateAccount()">
+          Activate
+        </button>
+      </div>
     </div>
   </div>
 </div>
