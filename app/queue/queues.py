@@ -1,6 +1,7 @@
 import app
 import random
 import datetime
+import logging
 from sqlalchemy.sql import func
 import os
 import redis
@@ -28,6 +29,7 @@ warmingTime = app.config.warmingTime # seconds: 120
 checkedPeriod = app.config.checkedPeriod # seconds: 20
 iqmWaitSeconds  = app.config.iqmWaitSeconds # seconds: 5
 logger = app.flask_app.logger
+logging.getLogger().setLevel(logging.ERROR)
 
 class InboxQueueManager(object):
     @classmethod
@@ -65,6 +67,7 @@ class InboxQueue(object):
     def run(cls):
         with Connection(cls.conn):
             worker = Worker(map(rqQueue, cls.listen))
+            worker.log.setLevel(logging.ERROR)
             IQM.enqueue()
             worker.work()
 IQ = InboxQueue()

@@ -24,13 +24,13 @@ angular.module('hidemailServices', ['ngRoute', 'ngResource', 'LocalStorageModule
       postTrial: function(customer_id) {
         return $http.post('/post-trial', {
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          data: {'token':token}
+          data: {'customer_id':customer_id}
         })
       },
       postActivate: function(customer_id) {
         return $http.post('/activate-account', {
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          data: {'token':token}
+          data: {'customer_id':customer_id}
         })
       }
     }

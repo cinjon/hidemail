@@ -10,7 +10,6 @@ from apiclient.discovery import build
 from oauth2client.client import Credentials
 
 logger = app.flask_app.logger
-
 time_period_change = 1 # days
 
 #######
@@ -20,16 +19,14 @@ time_period_change = 1 # days
 # Trial are people on a trial. They can only do one.
 # Break are people who are using it as a sabbatical. They can do as many as they want.
 account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3, 'break':4}
-account_costs = {'inactive':0, 'free':0, 'monthly':10, 'trial':0, 'break':5}
+account_costs = {'inactive':0, 'free':0, 'monthly':5, 'trial':0, 'break':5}
 #######
 
 def manage_inbox_queue(obj):
     if isinstance(obj, tuple): # obj: (ty, id, var)
-        logger.debug('managing inbox queue: %s' % obj[0])
         if obj[0] == 'customer':
             Customer.query.get(obj[1]).runWorker()
         elif obj[0] == 'inbox':
-            logger.debug('in inbox with %d and %s' % (obj[1], obj[2]))
             Inbox.query.get(obj[1]).runWorker(obj[2])
     else: # queue manager
         obj.runWorker()
@@ -90,6 +87,10 @@ class Customer(db.Model):
     account_type = db.Column(db.Integer) # See Account Types
     last_timezone_adj_time = db.Column(db.DateTime)
     last_timeblock_adj_time = db.Column(db.DateTime)
+    trial_start_time = db.Column(db.DateTime)
+    is_in_trial = db.Column(db.Boolean)
+    is_init_archiving = db.Column(db.Boolean)
+    is_init_archiving_complete = db.Column(db.Boolean)
     inboxes = db.relationship('Inbox', backref='customer', lazy='dynamic')
     purchases = db.relationship('Purchase', backref='customer', lazy='dynamic')
     sabbaticals = db.relationship('Sabbatical', backref='customer', lazy='dynamic')
@@ -102,14 +103,30 @@ class Customer(db.Model):
         self.account_type = account_type or account_types['inactive']
         self.last_timezone_adj_time = None
         self.last_timeblock_adj_time = None
+        self.trial_start_time = None
+        self.is_in_trial = False
+        self.is_init_archiving = False
+        self.is_init_archiving_complete = False
+
+    def start_trial(self, commit=True):
+        now = app.utility.get_time()
+        self.trial_start_time = now
+        self.is_in_trial = True
+        if commit:
+            db.session.commit()
+
+    def is_trial(self):
+        return self.is_in_trial
 
     def is_active(self):
         return self.account_type != account_types['inactive']
 
-    def activate(self, account_type, commit=True):
+    def activate(self, commit=True):
+        if not self.is_init_archiving_complete:
+            self.is_init_archiving = True
+            app.db.session.commit()
         for inbox in self.inboxes:
             inbox.activate(commit=False)
-        self.account_type = account_types[account_type]
         self.last_checked_time = app.utility.get_time()
         if commit:
             db.session.commit()
@@ -118,13 +135,9 @@ class Customer(db.Model):
         for inbox in self.inboxes:
             inbox.inactivate(commit=False)
         self.account_type = account_types['inactive']
-
-        # Reset timeblocks to be a week ago so that when they reactivate, all is ok.
-        # This is a shitty hack. Come up with a better model.
-        now = app.utility.get_time()
-        self.last_timezone_adj_time = now - datetime.timedelta(days=7)
-        self.last_timeblock_adj_time = now - datetime.timedelta(days=7)
-
+        self.is_init_archived = False
+        self.is_init_archived_complete = False
+        self.is_in_trial = False
         if commit:
             db.session.commit()
 
@@ -150,7 +163,7 @@ class Customer(db.Model):
             return True
         now = app.utility.get_time()
         time = self.last_timeblock_adj_time
-        return not time or time < now - datetime.timedelta(time_period_change)
+        return not self.is_active() or not time or time < now - datetime.timedelta(time_period_change)
 
     def set_timezone(self, offset, commit=True):
         timezone = create_timezone(offset, not commit)
@@ -201,11 +214,15 @@ class Customer(db.Model):
         if commit:
             db.session.commit()
 
+    def can_trial(self):
+        return self.purchases.count() == 0
+
     def basic_info(self):
         return {
-            'name':self.name, 'isActive':self.account_type != account_types['inactive'],
+            'name':self.name, 'customer_id':self.id, 'isArchiving':self.is_init_archiving,
+            'isArchived':self.is_init_archiving_complete, 'isActive':self.is_active(),
             'inboxes':[inbox.serialize() for inbox in self.inboxes],
-            'accountType':self.account_type, 'customer_id':self.id
+            'accountType':self.account_type, 'canTrial':self.can_trial()
             }
 
     def serialize(self):
@@ -258,6 +275,7 @@ class Inbox(db.Model):
                 app.controllers.mailbox.archive(self)
         elif self.is_active and var == 'hide_mail':
             self.is_archived = False
+            app.db.session.commit()
             app.controllers.mailbox.hide_all_mail(self)
 
     def get_gmail_service(self):
@@ -280,7 +298,6 @@ class Inbox(db.Model):
             db.session.commit()
 
     def activate(self, commit=True):
-        logger.debug('activating inbox %s' % self.email)
         app.queue.queues.IQ.get_queue().enqueue(
             manage_inbox_queue, ('inbox', self.id, 'archive'))
 

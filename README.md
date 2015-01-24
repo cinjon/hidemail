@@ -41,16 +41,18 @@ X 16. Stripe Tests
 18. Using my own account.
 X 19. FAQ
 X 20. Cron nightly to archive old email --> Fixed this by doing it at point of show / hide mail
-21. Fix UserData saving
-22. Time selection:
-    - Change the user creation to not make timeblocks
-    - Instead have timeblocks be a string model, e.g "9,10,11,12,18,19,20"
-    - Parse it on the client's side and show it on a calendar set.
-23. Can change the set of times and then press save to save them.
-24. Need an activate button once you have an acceptable account (free, trial, monthly, break)
-25. Instructions on how to use the calendar
+X 21. Fix UserData saving
+X 22. Time selection:
+X    - Change the user creation to not make timeblocks
+X    - Instead have timeblocks be a string model, e.g "9,10,11,12,18,19,20" --> Instead did proper timeblocks.
+X    - Parse it on the client's side and show it on a calendar set.
+X 23. Can change the set of times and then press save to save them.
+X 24. Need an activate button once you have an acceptable account (free, trial, monthly, break)
+X 25. Instructions on how to use the calendar
 26. Option to take a sabbatical --> need a start date and end date.
 27. Need a nightly cron that checks for people ending sabbaticals and trials. --> Can do this with APScheduler
+X 28. Change archive logic to have is_init_archiving, is_init_archive_complete. Turn on first when archiving. Turn on second when complete. Turn off both when inactivated.
+29. Does it work on mobile?
 
 
 Later:

@@ -7,8 +7,7 @@ import requests
 from datetime import datetime, timedelta
 from urllib import urlencode
 from functools import wraps
-from flask import g, send_from_directory, make_response, request, redirect, render_template, jsonify
-from sqlalchemy.sql.expression import func, select
+from flask import send_from_directory, make_response, request, jsonify
 from flask.ext.mobility.decorators import mobile_template
 
 logger = app.flask_app.logger
@@ -21,7 +20,6 @@ def favicon():
 
 # routing for basic pages (pass routing onto the Angular app)
 @app.flask_app.route('/')
-@app.flask_app.route('/about')
 @app.flask_app.route('/me')
 @app.flask_app.route('/plans')
 @app.flask_app.route('/faq')
@@ -139,7 +137,7 @@ def get_stripe_pk():
     return jsonify(success=True, stripe_pk=app.stripe_pk)
 
 #TODO: obfuscate the id?
-@app.flask_app.route('/api/get-time-info/<customer_id>', methods=['GET'])
+@app.flask_app.route('/get-time-info/<customer_id>', methods=['GET'])
 def get_time_info(customer_id):
     customer = app.models.Customer.query.get(int(customer_id))
     if not customer:
@@ -153,17 +151,22 @@ def update_blocks():
     if not customer or not customer.is_tb_adjust():
         return jsonify(success=False)
 
-    for block in customer.get_timeblocks():
-        block.is_active = False
-    for block in payload['timeblocks']:
-        customer.set_timeblock(int(block['start']), int(block['length']), commit=False)
+    new_blocks = payload['timeblocks']
+    curr_blocks = customer.get_timeblocks()
+    for new_block in new_blocks:
+        if not any([new_block['start'] == curr_block.start_time for curr_block in curr_blocks]):
+            customer.set_timeblock(new_block['start'], new_block['length'], commit=False)
+    for curr_block in curr_blocks:
+        if not any([new_block['start'] == curr_block.start_time for new_block in new_blocks]):
+            curr_block.is_active = False
+    app.db.session.commit()
 
     now = app.utility.get_time()
     customer.last_timeblock_adj_time = now
     if not customer.last_checked_time and customer.last_timezone_adj_time:
         customer.last_checked_time = now
-
     app.db.session.commit()
+
     return jsonify(success=True, user=customer.serialize())
 
 @app.flask_app.route('/update-timezone', methods=['POST'])
@@ -182,17 +185,17 @@ def update_timezone():
     return jsonify(success=True, user=customer.serialize())
 
 @app.flask_app.route('/activate-account', methods=['POST'])
-def update_timezone():
+def activate_account():
     payload = request.json['data']
     customer = app.models.Customer.query.get(int(payload['customer_id']))
     if not customer:
         return jsonify(success=False)
 
-    customer.activate() # what shte flow around apyment???
+    customer.activate()
     app.db.session.commit()
     return jsonify(success=True, user=customer.serialize())
 
-@app.flask_app.route('/api/user-from-token/<token>')
+@app.flask_app.route('/user-from-token/<token>')
 def user_from_token(token):
     try:
         decoded = jwt.decode(token, app.config.SECRET_KEY)
@@ -227,30 +230,35 @@ def post_payment():
     if account_type == account_types['monthly']:
         return buy_subscription(customer, token)
     else:
-        return buy_trial(customer, token)
+        return jsonify(success=False, error='request_fail')
 
 @app.flask_app.route('/post-trial', methods=['POST'])
 def post_trial():
-    # free trial, ends after three days
-    pass
+    # free trial, ends after a week.
+    payload = request.json['data']
+    customer_id = payload['customer_id']
+    if not customer_id:
+        return jsonify(success=False, error='request_fail')
 
-def buy_trial(customer, token):
-    # Right now, this is set up in such a way that each transaction should be considered a new customer. So reset the stripe_customer_id each time.
+    customer = app.models.Customer.query.get(int(customer_id))
+    if not customer:
+        return jsonify(success=False, error='request_fail')
+
+    return buy_trial(customer)
+
+def buy_trial(customer):
+    return _complete_purchase(customer, 'trial', account_costs['trial']*100)
+
+def buy_subscription(customer, token):
     handler = app.controllers.stripe_handler.StripeHandler()
-    description = '%s - %s' % (customer.name, customer.id)
+    description = '%s' % customer.name
     card = token.get('id')
-    stripe_customer = handler.create_customer(card=card, description=description)
+    stripe_customer = handler.create_customer(card=card, description=description, plan='monthly')
     if not stripe_customer['success']:
         return jsonify(success=False, errorType=stripe_customer['errorType'])
     stripe_customer_id = stripe_customer['id']
-
     customer.set_stripe_id(stripe_customer_id)
-    amount = account_costs['trial']*100
-    charge = handler.charge(amount=amount, currency='usd', stripe_customer_id=stripe_customer_id)
-
-    if not charge['success']:
-        return jsonify(success=False, errorType=charge['errorType'])
-    return _complete_purchase(customer, 'trial', amount)
+    return _complete_purchase(customer, 'monthly', account_costs['monthly']*100)
 
 def buy_sabbatical(customer, token):
     handler = app.controllers.stripe_handler.StripeHandler()
@@ -270,24 +278,15 @@ def buy_sabbatical(customer, token):
         return jsonify(success=False, errorType=charge['errorType'])
     return _complete_purchase(customer, 'break', amount)
 
-def buy_subscription(customer, token):
-    # subscription, monthly
-    handler = app.controllers.stripe_handler.StripeHandler()
-    description = '%s' % customer.name
-    card = token.get('id')
-    stripe_customer = handler.create_customer(card=card, description=description, plan='monthly')
-    if not stripe_customer['success']:
-        return jsonify(success=False, errorType=stripe_customer['errorType'])
-    stripe_customer_id = stripe_customer['id']
-    customer.set_stripe_id(stripe_customer_id)
-    return _complete_purchase(customer, 'monthly', account_costs['monthly']*100)
-
 def _complete_purchase(customer, ty, amount):
     purchase = app.models.create_purchase(
         account_types[ty], amount, commit=False)
     customer.purchases.append(purchase)
+    customer.account_type = purchase.account_type
     if ty == 'break':
         sabbatical = app.models.create_sabbatical(commit=False)
         customer.sabbaticals.append(sabbatical)
+    if ty == 'trial':
+        customer.start_trial(commit=False)
     app.db.session.commit()
     return jsonify(success=True, user=customer.serialize())

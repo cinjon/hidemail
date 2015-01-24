@@ -1,13 +1,6 @@
-<div class="introductions">
-  <div ng-if="allInboxes != null" class="row introduction">
-    <div class="col-xs-12">
-      {{allInboxes}}
-    </div>
-  </div>
-  <div ng-repeat="line in introductions track by $index" class="row introduction">
-    <div class="col-xs-12">
-      {{line}}
-    </div>
+<div ng-if="allInboxes != null" class="row introduction">
+  <div class="col-xs-12">
+    {{allInboxes}}.
   </div>
 </div>
 
@@ -17,41 +10,39 @@
       Green times are when your email is visible.
     </div>
   </div>
-  <div class="col-xs-12 col-md-3" ng-repeat="calendarColumn in calendarColumns">
-    <div class="row" ng-repeat="calendarBlock in calendarColumn">
-      <button ng-disabled="!canSetTimeblocks()" class="btn btn-sm timeChoice"
-              ng-class="{'btn-success':isUserBlock(calendarBlock),
-              'btn-white':!isUserBlock(calendarBlock)}" ng-click="toggleBlock(calendarBlock)">
-{{calendarBlock.start}} - {{calendarBlock.end}}
-      </button>
-    </div>
-  </div>
-</div>
-
-<div class="timeChanges">
   <div class="row">
-    <div class="col-xs-12 col-md-6">
+    <div class="col-xs-12">
       <button class="btn btn-sm btn-white timezone" style="width:100%"
               ng-disabled="!canSetTimezone()" ng-click="setTimezone()"
               ng-class="{btnHover:canSetTimezone()}">
         {{getTimezoneDesc()}} {{clock | date:'shortTime' | lowercase}}, gmt {{timezoneOffset()}}
       </button>
     </div>
-    <div class="col-xs-12 col-md-3">
-      <div class="row">
-        <button class="btn btn-sm btn-white timezone"
-                ng-disabled="!canSetTimeblocks()" ng-click="submitTimeblocks()">
-          Submit Changes
+  </div>
+  <div class="row">
+    <div class="col-xs-3" ng-repeat="calendarColumn in calendarColumns">
+      <div ng-repeat="calendarBlock in calendarColumn">
+        <button ng-disabled="!canSetTimeblocks()" class="btn btn-sm timeChoice"
+                ng-class="{'btn-success':isUserBlock(calendarBlock),
+                          'btn-white':!isUserBlock(calendarBlock)}" ng-click="toggleBlock(calendarBlock)">
+          {{calendarBlock.start}} - {{calendarBlock.end}}
         </button>
       </div>
     </div>
-    <div class="col-xs-12 col-md-3">
-      <div class="row">
-        <button class="btn btn-sm btn-white timezone"
-                ng-disabled="user.isActive" ng-click="activateAccount()">
-          Activate
-        </button>
-      </div>
+  </div>
+  <div class="row">
+    <div class="col-xs-6">
+      <button class="btn btn-sm btn-white timezone"
+              ng-disabled="!canSubmitTimeblocks()" ng-click="updateTimeblocks()">
+        Submit Changes
+      </button>
+    </div>
+    <div class="col-xs-6">
+      <button class="btn btn-sm btn-white timezone"
+              ng-click="activateAccount()" ng-if="user.isArchiving ||
+        (!user.isArchiving && !user.isArchived && user.isActive)" ng-disabled="user.isArchiving">
+        {{activateButtonDescription()}}
+      </button>
     </div>
   </div>
 </div>

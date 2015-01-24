@@ -19,6 +19,8 @@ if not flask_app.debug:
     sslify = SSLify(flask_app)
     stripe_pk = config.STRIPE_LIVE_PK
     stripe_sk = config.STRIPE_LIVE_SK
+flask_app.logger.debug('using live_pk: %s, using live_sk: %s' % (stripe_sk == config.STRIPE_LIVE_SK, stripe_pk == config.STRIPE_LIVE_PK))
+flask_app.logger.debug('using test_pk: %s, using test_sk: %s' % (stripe_pk == config.STRIPE_TEST_PK, stripe_sk == config.STRIPE_TEST_SK))
 
 import models
 import queue

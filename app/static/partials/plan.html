@@ -1,4 +1,4 @@
-<div class="col-xs-10 col-xs-offset-1 col-md-3 col-md-offset-1">
+<div class="col-xs-5 col-xs-offset-1">
   <div class="panel panel-primary">
     <div class="panel-heading">
       <h3 class="panel-title">{{plan.title}}</h3>
@@ -22,7 +22,8 @@
         <button class="btn btn-success" ng-disabled="true">Active!</button>
       </div>
       <div class="planButton" ng-if="user != null && !user.isActive">
-        <button class="btn btn-success" id="stripeButton" ng-click="buy(plan)">Purchase</button>
+        <button class="btn btn-success" id="stripeButton"
+        ng-click="buy(plan)" ng-disabled="plan.selection == 'trial' && !user.canTrial">{{plan.getTerm}}</button>
       </div>
       <div class="planButton" ng-if="user == null">
         <button class="btn btn-success" id="connectButton" ng-click="oauth()">Connect</button>

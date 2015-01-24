@@ -16,22 +16,26 @@ def get_headers(inbox, content_type=None):
         headers['Content-Type'] = content_type
     return headers
 
-def _get_thread_ids_from_label(inbox, label, q=None):
+def get_thread_ids_and_page_token(inbox, labelIds, q=None, pageToken=None, service=None):
+    q = q or ''
+    service = service or inbox.get_gmail_service()
+    response = service.users().threads().list(userId=inbox.email, labelIds=labelIds, q=q, pageToken=pageToken).execute()
+    return [t['id'] for t in response.get('threads', [])], response.get('nextPageToken')
+
+def get_all_thread_ids_from_label(inbox, label, q=None):
     backoff = 1
     thread_ids = []
-    q = q or ''
     service = inbox.get_gmail_service()
-    response = service.users().threads().list(userId=inbox.email, labelIds=[label], q=q).execute()
-    while 'nextPageToken' in response:
+    nextPageToken = None
+    ids, nextPageToken = get_thread_ids_and_page_token(inbox, [label], q, nextPageToken, service)
+    while nextPageToken:
         try:
-            thread_ids.extend([t['id'] for t in response.get('threads', [])])
-            response = service.users().threads().list(
-                userId=inbox.email, labelIds=[label], q=q,
-                pageToken=response['nextPageToken']).execute()
-        except Exception, e: # this should be a 429 or something. unsure what exactly. dirty hack.
+            thread_ids.extend(ids)
+            ids, nextPageToken = get_thread_ids_and_page_token(inbox, [label], q, nextPageToken, service)
+        except Exception, e:
             time.sleep(backoff)
             backoff = backoff * 2
-    thread_ids.extend([t['id'] for t in response.get('threads', [])])
+    thread_ids.extend(ids)
     return thread_ids
 
 class Batcher(object):
@@ -87,28 +91,42 @@ class Batcher(object):
 
 def archive(inbox, dt=None):
     """Archives all mail from any day earlier than the specified dt. Uses exponential backoff if it hits an error"""
+    customer = inbox.customer
     dt = dt or app.utility.get_time() - datetime.timedelta(days=15)
     date_string = '%s/%s/%s' % (dt.year, dt.month, dt.day)
     q = 'before:%s' % date_string
-    threads = _get_thread_ids_from_label(inbox, 'INBOX', q)
     payload = {'removeLabelIds':['INBOX']}
-    batcher = Batcher(inbox.email, inbox.get_gmail_service(), payload, threads)
+    service = inbox.get_gmail_service()
+    email = inbox.email
+    label = 'INBOX'
+
+    thread_ids, pageToken = get_thread_ids_and_page_token(inbox, [label], q, None, service)
+    thread_ids.reverse()
+    batcher = Batcher(email, service, payload, thread_ids)
     thread_count = len(batcher.threads)
     while batcher.threads:
         try:
             batcher.runWorker()
         except Exception, e:
             pass
-    inbox.is_active = True
-    inbox.is_archived = True
-    app.db.session.commit()
+
+    if not pageToken:
+        inbox.is_active = True
+        inbox.is_archived = True
+        if not customer.is_init_archiving_complete:
+            customer.is_init_archiving = False
+            customer.is_init_archiving_complete = True
+        app.db.session.commit()
+    else:
+        app.queue.queues.IQ.get_queue().enqueue(
+            app.models.manage_inbox_queue, ('inbox', inbox.id, 'archive'))
 
 def modify_threads(inbox, payloadKey, label, thread_ids):
     Batcher(inbox.email, inbox.get_gmail_service(), {payloadKey:[label]}, thread_ids).runWorker()
 
 def hide_all_mail(inbox):
     label = 'INBOX'
-    threads = _get_thread_ids_from_label(inbox, label)
+    threads = get_all_thread_ids_from_label(inbox, label)
     threads = [app.models.get_or_create_thread(thread, inbox, commit=False) for thread in threads]
     dt = app.utility.get_time()
     for thread in threads:
