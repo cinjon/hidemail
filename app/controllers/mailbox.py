@@ -128,6 +128,9 @@ def hide_all_mail(inbox):
     label = 'INBOX'
     threads = get_all_thread_ids_from_label(inbox, label)
     threads = [app.models.get_or_create_thread(thread, inbox, commit=False) for thread in threads]
+    threads = [thread for thread in threads if thread]
+    if not threads:
+        return
     dt = app.utility.get_time()
     for thread in threads:
         thread.hide(dt, False)

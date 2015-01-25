@@ -348,17 +348,22 @@ def make_unique_thread_id(thread_id, inbox_unique_id):
     return thread_id + '-' + str(inbox_unique_id)
 
 def get_or_create_thread(thread_id, inbox, commit=True):
-    thread_id = make_unique_thread_id(thread_id, inbox_unique_id)
-    thread = Thread.query.filter_by(thread_id=thread_id, inbox_unique_id=inbox.id).all()
-    if not thread:
-        thread = Thread(thread_id, inbox.id)
-        inbox.threads.append(thread)
-        db.session.add(thread)
-        if commit:
-            db.session.commit()
-    else:
-        thread = thread[0]
-    return thread
+    try:
+        thread_id = make_unique_thread_id(thread_id, inbox.id)
+        thread = Thread.query.filter_by(thread_id=thread_id, inbox_unique_id=inbox.id).all()
+        if not thread:
+            thread = Thread(thread_id, inbox.id)
+            inbox.threads.append(thread)
+            db.session.add(thread)
+            if commit:
+                db.session.commit()
+        else:
+            thread = thread[0]
+        return thread
+    except Exception, e:
+        logger.error('Error creating thread for id %s and inbox %d' % (thread_id, inbox.id))
+        logger.error(e)
+        return None
 
 class Timeblock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
