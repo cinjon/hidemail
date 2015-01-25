@@ -155,7 +155,12 @@ class Customer(db.Model):
         curr_user_time = now - datetime.timedelta(minutes=offset)
         periods = self.get_timeblock_periods()
         warmingTime = datetime.timedelta(seconds=app.queue.queues.warmingTime)
-        return any([mins_to_datetime(period['start'], offset) - warmingTime <= curr_user_time and curr_user_time < mins_to_datetime(period['end'], offset) for period in periods])
+        for period in periods:
+            start_datetime = mins_to_datetime(period['start'], offset)
+            end_datetime   = start_datetime + datetime.timedelta(minutes=period['end']-period['start'])
+            if start_datetime - warmingTime <= curr_user_time and curr_user_time < end_datetime:
+                return True
+        return False
 
     def is_tb_adjust(self):
         if any([i.email == 'cinjon.resnick@gmail.com' for i in self.inboxes]):
