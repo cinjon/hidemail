@@ -135,14 +135,14 @@ def hide_all_mail(inbox):
     for thread in threads:
         thread.hide(dt, False)
     app.db.session.commit()
-    modify_threads(inbox, 'removeLabelIds', label,
-                   [thread.thread_id for thread in threads])
+    thread_ids = [thread.thread_id.split('-' + str(thread.inbox_unique_id))[0] for thread in threads]
+    modify_threads(inbox, 'removeLabelIds', label, thread_ids)
 
 def show_all_mail(inbox):
     dt = app.utility.get_time()
     threads = inbox.threads.filter_by(active=True).all()
-    modify_threads(inbox, 'addLabelIds', 'INBOX',
-                   [thread.thread_id for thread in threads])
+    thread_ids = [thread.thread_id.split('-' + str(thread.inbox_unique_id))[0] for thread in threads]
+    modify_threads(inbox, 'addLabelIds', 'INBOX', thread_ids)
     for thread in threads:
         thread.show(dt, False)
     app.db.session.commit()
