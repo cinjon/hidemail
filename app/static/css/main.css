@@ -3,10 +3,6 @@ body {
    font-weight: 300;
 }
 
-.content {
-    padding-bottom:80px;
-}
-
 .header {
     padding-top:30px;
     padding-bottom:30px;
@@ -22,11 +18,6 @@ body {
     color:#00529B;
     position:relative;
     top:3px;
-}
-
-.connect {
-    float:right;
-    margin-left:30px;
 }
 
 ::-webkit-input-placeholder {
@@ -63,17 +54,78 @@ body {
     position:relative;
 }
 
-@media only screen and (max-device-width: 750px) {
-    .tel-input {
-        width: 100%;
+@media only screen and (min-width: 320px) and (max-width: 480px) {
+    .header {
+        font-size: 12px;
+        padding-bottom:0px;
     }
-
-    .byline {
-        font-size: 26px;
+    .introductions {
+        margin-bottom:0px;
     }
-
-    input.phone {
-        font-size: 26px;
+    .introduction {
+        font-size:15px;
+        margin-bottom:15px;
+    }
+    .btn-responsive {
+        padding: 2px 4px;
+        font-size: 80%;
+        line-height: 1;
+    }
+    .connect {
+        float:right;
+        margin-left:5px;
+        font-size:80%;
+    }
+    .content {
+        padding-bottom:20px;
+    }
+    .faq {
+        font-size: 15px;
+        margin-bottom:25px;
+    }
+    .f-question {
+        font-weight:600;
+    }
+    .f-answer {
+        margin-top:10px;
+    }
+    .plans {
+        margin-top:20px;
+    }
+    .plan {
+        margin-right:15px;
+    }
+}
+@media only screen and (min-width:481px) {
+    .introductions {
+        margin-bottom:50px;
+    }
+    .introduction {
+        font-size:25px;
+        margin-bottom:15px;
+    }
+    .connect {
+        float:right;
+        margin-left:30px;
+    }
+    .content {
+        padding-bottom:80px;
+    }
+    .faq {
+        font-size:25px;
+        margin-bottom:55px;
+    }
+    .f-question {
+        font-weight:600;
+    }
+    .f-answer {
+        margin-top:10px;
+    }
+    .plans {
+        margin-top:100px;
+    }
+    .plan {
+        margin-right:60px;
     }
 }
 
@@ -116,25 +168,12 @@ body {
     font-size:25px;
     top:10px;
 }
-.introduction {
-    font-size:25px;
-    margin-bottom:15px;
-}
-.introductions {
-    margin-bottom:50px;
-}
 #footer {
     width:100%;
     bottom:0px;
     position:absolute;
 }
 
-.plans {
-    margin-top:100px;;
-}
-.plan {
-    margin-right:60px;
-}
 .panel {
     text-align:center;
 }
@@ -195,16 +234,6 @@ body {
     border-color:inherit;
 }
 
-.faq {
-    font-size:25px;
-    margin-bottom:55px;
-}
-.f-question {
-    font-weight:600;
-}
-.f-answer {
-    margin-top:10px;
-}
 .alert-danger {
     color:#D8000C;
 }
