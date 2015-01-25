@@ -1,4 +1,3 @@
-
 'use strict';
 
 var accountTypes = {0:'Inactive', 1:'Free', 2:'Subscription', 3:'Week Trial'}
@@ -115,7 +114,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         isSubscription:true, period:'month',
         title:"Monthly Service",
         details:[
-          "Two lattes at Sightglass.",
+          "An artisan's latte at Sightglass.",
           "Or focus and deeper thought.",
           "Our Top Choice."
         ]
@@ -139,8 +138,8 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
         title:"One Week Red Pill",
         details:[
           "Free trial.",
-          "Come on board.",
-          "The water's warm."
+          "Comes with lunch.",
+          "And a week of flow."
         ]
       }
     ]
