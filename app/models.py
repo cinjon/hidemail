@@ -1,6 +1,5 @@
 import app
 from app import db
-import random
 import os
 import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -317,7 +316,7 @@ class Thread(db.Model):
     Tracks the set of threads that have been moved.
     inbox_id is the foreign key to the associated inbox, but because there may be multiple inboxes with a particular thread, need to also have a separate field to uniq id
     """
-    thread_id = db.Column(db.Text, primary_key=True) # from google
+    thread_id = db.Column(db.Text, primary_key=True) # from google, amended with user ID so that shared thread_ids are made unique
     creation_time = db.Column(db.DateTime)
     last_hide_time = db.Column(db.DateTime)
     last_show_time = db.Column(db.DateTime)
@@ -345,7 +344,11 @@ class Thread(db.Model):
         if commit:
             db.session.commit()
 
+def make_unique_thread_id(thread_id, inbox_unique_id):
+    return thread_id + '-' + str(inbox_unique_id)
+
 def get_or_create_thread(thread_id, inbox, commit=True):
+    thread_id = make_unique_thread_id(thread_id, inbox_unique_id)
     thread = Thread.query.filter_by(thread_id=thread_id, inbox_unique_id=inbox.id).all()
     if not thread:
         thread = Thread(thread_id, inbox.id)
