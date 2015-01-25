@@ -36,7 +36,7 @@ def get_all_thread_ids_from_label(inbox, label, q=None):
             time.sleep(backoff)
             backoff = backoff * 2
     thread_ids.extend(ids)
-    return thread_ids
+    return list(set(thread_ids))
 
 class Batcher(object):
     def __init__(self, userId, service, payload, threads):
