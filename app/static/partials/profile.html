@@ -12,7 +12,7 @@
   </div>
   <div class="row">
     <div class="col-xs-12">
-      <button class="btn btn-sm btn-white timezone" style="width:100%"
+      <button class="btn btn-sm btn-white btn-block timezone"
               ng-disabled="!canSetTimezone()" ng-click="setTimezone()"
               ng-class="{btnHover:canSetTimezone()}">
         {{getTimezoneDesc()}} {{clock | date:'shortTime' | lowercase}}, gmt {{timezoneOffset()}}
@@ -20,7 +20,7 @@
     </div>
   </div>
   <div class="row">
-    <div class="col-xs-3" ng-repeat="calendarColumn in calendarColumns">
+    <div class="col-md-3 col-xs-6" ng-repeat="calendarColumn in calendarColumns">
       <div ng-repeat="calendarBlock in calendarColumn">
         <button ng-disabled="!canSetTimeblocks()" class="btn btn-sm timeChoice"
                 ng-class="{'btn-success':isUserBlock(calendarBlock),
@@ -30,7 +30,7 @@
       </div>
     </div>
   </div>
-  <div class="row">
+  <div class="row submitButtons">
     <div class="col-xs-6">
       <button class="btn btn-sm btn-white timezone"
               ng-disabled="!canSubmitTimeblocks()" ng-click="updateTimeblocks()">
