@@ -304,7 +304,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       } else if (!$scope.user.isActive || !$scope.user.isArchived) {
         return true;
       } else {
-        return isInValidTimeRange($scope.user.lastTbAdj) && isBlocksDifferent();
+        return isInValidTimeRange($scope.user.lastTbAdj)
       }
     }
     $scope.canSubmitTimeblocks = function() {
