@@ -271,6 +271,12 @@ class Inbox(db.Model):
         self.is_archived = False
 
     def runWorker(self, var):
+        try:
+            if not app.controllers.mailbox.is_fresh_token(self):
+                logger.debug('Error running refresh_access for inbox (%d, %s).' % (self.id, self.email))
+        except Exception, e:
+            logger.debug('Running refresh token for (%d, %s) caused this exception: %s.' % (self.id, self.email, e))
+
         if var == 'archive':
             app.controllers.mailbox.archive(self)
         elif self.is_active and var == 'show_mail':
