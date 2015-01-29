@@ -105,11 +105,11 @@ def google():
         name = profile.get('displayName') or profile.get('name')
         if not customer:
             customer = app.models.Customer(name=name)
+            customer.setup_tz_on_arrival(tz_offset, commit=False)
+            customer.setup_tb_on_arrival(commit=False)
         email = profile.get('email')
         inbox = app.models.Inbox(name=name, email=email, google_id=sub)
         inbox.set_google_access_token(access_token, expires_in, refresh_token, google_credentials, commit=False)
-        customer.setup_tz_on_arrival(tz_offset, commit=False)
-        customer.setup_tb_on_arrival(commit=False)
         if customer.is_active():
             inbox.activate()
         customer.inboxes.append(inbox)
