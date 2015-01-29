@@ -110,16 +110,16 @@ def archive(inbox, dt=None):
         except Exception, e:
             pass
 
-    if not pageToken:
+    if pageToken:
+        app.queue.queues.IQ.get_queue().enqueue(
+            app.models.manage_inbox_queue, ('inbox', inbox.id, 'archive'))
+    elif not inbox.is_active or not customer.is_init_archiving_complete:
         inbox.is_active = True
         inbox.is_archived = True
         if not customer.is_init_archiving_complete:
             customer.is_init_archiving = False
             customer.is_init_archiving_complete = True
         app.db.session.commit()
-    else:
-        app.queue.queues.IQ.get_queue().enqueue(
-            app.models.manage_inbox_queue, ('inbox', inbox.id, 'archive'))
 
 def modify_threads(inbox, payloadKey, label, thread_ids):
     Batcher(inbox.email, inbox.get_gmail_service(), {payloadKey:[label]}, thread_ids).runWorker()
