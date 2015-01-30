@@ -100,7 +100,9 @@ def google():
                 customer.setup_tz_on_arrival(tz_offset)
             if not customer.last_timeblock_adj_time:
                 customer.setup_tb_on_arrival()
-            return jsonify(token=token, user=customer.basic_info(), success=True)
+            if customer.is_active(): #and not customer.is_paused(): TODO!!!
+                inbox.activate()
+            return jsonify(token=token, user=customer.serialize(), success=True)
 
         name = profile.get('displayName') or profile.get('name')
         if not customer:
@@ -116,7 +118,7 @@ def google():
         app.db.session.add(inbox)
         app.db.session.add(customer)
         app.db.session.commit()
-        return jsonify(token=create_token(customer), user=customer.basic_info(), success=True)
+        return jsonify(token=create_token(customer), user=customer.serialize(), success=True)
     except Exception, e:
         app.controllers.mailbox.revoke_access(access_token=access_token)
         return jsonify(success=False)
