@@ -316,7 +316,7 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
     }
 
     var isInValidTimeRange = function(time) {
-      return !time || time < new Date(new Date() - 1000*60*60*24*3)
+      return !time || time < new Date(new Date() - 1000*60*60*24)
     }
 
     var isBlocksDifferent = function() {
