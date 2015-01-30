@@ -32,6 +32,12 @@ angular.module('hidemailServices', ['ngRoute', 'ngResource', 'LocalStorageModule
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
           data: {'customer_id':customer_id}
         })
+      },
+      postToggleInboxesActive: function(customer_id, is_activate) {
+        return $http.post('/toggle-inboxes-active', {
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          data: {'customer_id':customer_id, 'is_activate':is_activate}
+        })
       }
     }
   })

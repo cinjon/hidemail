@@ -100,7 +100,8 @@ def google():
                 customer.setup_tz_on_arrival(tz_offset)
             if not customer.last_timeblock_adj_time:
                 customer.setup_tb_on_arrival()
-            if customer.is_active(): #and not customer.is_paused(): TODO!!!
+            app.db.session.commit()
+            if customer.is_active() and not customer.is_paused():
                 inbox.activate()
             return jsonify(token=token, user=customer.serialize(), success=True)
 
@@ -112,12 +113,12 @@ def google():
         email = profile.get('email')
         inbox = app.models.Inbox(name=name, email=email, google_id=sub)
         inbox.set_google_access_token(access_token, expires_in, refresh_token, google_credentials, commit=False)
-        if customer.is_active():
-            inbox.activate()
         customer.inboxes.append(inbox)
         app.db.session.add(inbox)
         app.db.session.add(customer)
         app.db.session.commit()
+        if customer.is_active() and not customer.is_paused():
+            inbox.activate()
         return jsonify(token=create_token(customer), user=customer.serialize(), success=True)
     except Exception, e:
         app.controllers.mailbox.revoke_access(access_token=access_token)
@@ -194,6 +195,24 @@ def activate_account():
         return jsonify(success=False)
 
     customer.activate()
+    app.db.session.commit()
+    return jsonify(success=True, user=customer.serialize())
+
+@app.flask_app.route('/toggle-inboxes-active', methods=['POST'])
+def toggle_inboxes_active():
+    payload = request.json['data']
+    customer = app.models.Customer.query.get(int(payload['customer_id']))
+    if not customer:
+        return jsonify(success=False)
+
+    if payload['is_activate']: # activate the account.
+        customer.activate()
+        last_purchase = customer.get_last_purchase()
+        customer.account_type = last_purchase.account_type # TODO: check for expiration
+        if customer.account_type == app.models.account_types['trial']:
+            customer.is_in_trial = True
+    else:
+        customer.inactivate(account_type=app.models.account_types['pause'])
     app.db.session.commit()
     return jsonify(success=True, user=customer.serialize())
 

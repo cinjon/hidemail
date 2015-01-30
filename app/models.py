@@ -17,7 +17,8 @@ time_period_change = 1 # days
 # Monthly is people with a subscription.
 # Trial are people on a trial. They can only do one.
 # Break are people who are using it as a sabbatical. They can do as many as they want.
-account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3, 'break':4}
+# Pause are people who inactivate account manually.
+account_types = {'inactive':0, 'free':1, 'monthly':2, 'trial':3, 'break':4, 'pause':5}
 account_costs = {'inactive':0, 'free':0, 'monthly':5, 'trial':0, 'break':5}
 #######
 
@@ -120,20 +121,24 @@ class Customer(db.Model):
     def is_active(self):
         return self.account_type != account_types['inactive']
 
+    def is_paused(self):
+        return self.account_type == account_types['pause']
+
     def activate(self, commit=True):
         if not self.is_init_archiving_complete:
             self.is_init_archiving = True
             app.db.session.commit()
-        for inbox in self.inboxes:
+        for inbox in self.inboxes: # activates inbox, which starts its archiving process before activating it.
             inbox.activate(commit=False)
         self.last_checked_time = app.utility.get_time()
         if commit:
             db.session.commit()
 
-    def inactivate(self, commit=True):
+    def inactivate(self, commit=True, account_type=None):
+        account_type = account_type or account_types['inactive']
         for inbox in self.inboxes:
             inbox.inactivate(commit=False)
-        self.account_type = account_types['inactive']
+        self.account_type = account_type
         self.is_init_archived = False
         self.is_init_archived_complete = False
         self.is_in_trial = False
@@ -188,6 +193,9 @@ class Customer(db.Model):
     def get_timeblocks(self):
         return self.timeblocks.filter_by(is_active=True)
 
+    def get_last_purchase(self):
+        return self.purchases.order_by(desc(Purchase.creation_time)).first()
+
     def get_timeblock_periods(self):
         ret = []
         for start, end in sorted([(tb.start_time, tb.start_time + tb.length) for tb in self.get_timeblocks()], key=lambda k:k[0]):
@@ -225,7 +233,7 @@ class Customer(db.Model):
         return {
             'name':self.name, 'customer_id':self.id, 'isArchiving':self.is_init_archiving,
             'isArchived':self.is_init_archiving_complete, 'isActive':self.is_active(),
-            'inboxes':[inbox.serialize() for inbox in self.inboxes],
+            'inboxes':[inbox.serialize() for inbox in self.inboxes], 'isPaused':self.is_paused(),
             'accountType':self.account_type, 'canTrial':self.can_trial()
             }
 
@@ -320,7 +328,7 @@ class Inbox(db.Model):
             db.session.commit()
 
     def serialize(self):
-        return {'name':self.name, 'email':self.email, 'isActive':self.is_active}
+        return {'name':self.name, 'email':self.email, 'isActive':self.is_active, 'isArchived':self.is_archived}
 
 class Thread(db.Model):
     """

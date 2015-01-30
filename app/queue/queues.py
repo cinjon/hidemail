@@ -27,7 +27,7 @@ from time import sleep
 
 warmingTime = app.config.warmingTime # seconds: 120
 checkedPeriod = app.config.checkedPeriod # seconds: 20
-iqmWaitSeconds  = app.config.iqmWaitSeconds # seconds: 5
+iqmWaitSeconds  = app.config.iqmWaitSeconds # seconds: 2
 logger = app.flask_app.logger
 logging.getLogger().setLevel(logging.ERROR)
 
@@ -49,7 +49,7 @@ class InboxQueueManager(object):
         now = app.utility.get_time()
         last_checked_param = now - datetime.timedelta(0, checkedPeriod)
         for customer in app.models.Customer.query.filter(app.models.Customer.last_checked_time < last_checked_param):
-            if customer.is_active():
+            if customer.is_active() and not customer.is_paused():
                 customer.set_last_checked_time(now)
                 customer.runWorker()
         cls.enqueue()

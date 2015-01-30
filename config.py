@@ -7,7 +7,7 @@ baseurl = os.environ.get('HIDEMAIL_BASE_URL', None)
 
 warmingTime = int(os.environ.get('HIDEMAIL_WARMING_TIME', 120))
 checkedPeriod = int(os.environ.get('HIDEMAIL_CHECK_PERIOD', 20))
-iqmWaitSeconds = int(os.environ.get('HIDEMAIL_IQM_WAIT', 5))
+iqmWaitSeconds = int(os.environ.get('HIDEMAIL_IQM_WAIT', 2))
 batchRequestLimit = int(os.environ.get('HIDEMAIL_BATCH_LIMIT', 10))
 
 SQLALCHEMY_DATABASE_URI = os.environ.get('HIDEMAIL_DATABASE_URL', os.environ.get('DATABASE_URL', None))

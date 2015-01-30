@@ -70,14 +70,16 @@
               </div>
               <button class="btn btn-default btn-responsive connect" ng-click="go('/plans')">Plans</button>
               <button class="btn btn-default btn-responsive connect" ng-click="go('/faq')">Faq</button>
-              <span id="inactive-warning" class="connect" ng-if="user && !user.isActive">Inactive</span>
-              <span id="active-reminder" class="connect" ng-if="user &&
+              <span class="connect" ng-if="user && !user.isActive">Inactive</span>
+              <span class="connect" ng-if="user &&
               user.isActive && !user.isArchived &&
-              !user.isArchiving">Ready</span>
-              <span id="active-reminder" class="connect" ng-if="user &&
-              user.isActive && !user.archived && user.isArchiving">Archiving</span>
-              <span id="active-reminder" class="connect" ng-if="user &&
-              user.isActive && user.isArchived">Active</span>
+              !user.isArchiving && !user.isPaused">Ready</span>
+              <span class="connect" ng-if="user &&
+              user.isActive && !user.archived && user.isArchiving && !user.isPaused">Archiving</span>
+              <span class="connect" ng-if="user &&
+              user.isActive && user.isArchived && !user.isPaused">Active</span>
+              <span class="connect" ng-if="user &&
+              user.isActive && user.isPaused">Paused</span>
             </div>
           </div>
         </div>

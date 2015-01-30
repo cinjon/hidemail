@@ -1,14 +1,17 @@
-<div ng-if="allInboxes != null" class="row introduction">
-  <div class="col-xs-12">
-    {{allInboxes}}.
+<div class="timeChanges">
+  <div class="row">
+    <div class="col-xs-6 introduction">
+      Green times are when your email is visible.
+    </div>
+    <div ng-if="hasInboxes" class="col-xs-6 introduction">
+      <button class="toggle-inbox btn-sm btn-white"
+    ng-class="{'deactivate-inbox-color':!user.isPaused}" ng-click="toggleInboxesActive(user.isPaused)" ng-disabled="!isInboxToggleEnabled(user)">
+        {{toggleInboxesDesc(user.isActive, !user.isPaused)}}: {{allInboxes}}.
+      </button>
+    </div>
   </div>
 </div>
 
-<div class="timeChanges">
-  <div class="row">
-    <div class="col-xs-12 introduction">
-      Green times are when your email is visible.
-    </div>
   </div>
   <div class="row">
     <div class="col-xs-12">

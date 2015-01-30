@@ -204,11 +204,17 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       }
     }
 
-    $scope.$watch(function() { return UserData.getUser() }, function(newValue) {
-      if (newValue && !newValue.timeblocks) {
-        getTimeInfo(newValue)
-      } else if (newValue) {
-        $scope.user = newValue;
+    $scope.$watch(function() { return UserData.getUser() }, function(user) {
+      if (user && !user.timeblocks) {
+        getTimeInfo(user)
+      } else if (user) {
+        $scope.user = user;
+        $scope.hasInboxes = user && user.inboxes.length > 0;
+        if ($scope.user.inboxes.length > 0) {
+          $scope.allInboxes = $scope.user.inboxes.map(function(inbox) {return inbox.email;}).join(', ');
+        } else {
+          $scope.allInboxes = null;
+        }
       }
     }, true)
 
@@ -236,17 +242,32 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       })
     }
 
+    $scope.isInboxToggleEnabled = function(user) {
+      return user && user.isActive;
+    }
+    $scope.toggleInboxesActive = function(isActivate) {
+      Post.postToggleInboxesActive($scope.user.customer_id, isActivate).then(function(response) {
+        var data = response.data;
+        if (data.success) {
+          setUser(data.user);
+        }
+      });
+    }
+    $scope.toggleInboxesDesc = function(isUserActive, isInboxesActive) {
+      if (!isUserActive) {
+        return "Inactive account"
+      } else if (isInboxesActive) {
+        return "Click to pause"
+      } else {
+        return "Click to resume"
+      }
+    }
+
     $scope.allInboxes = null;
     $scope.currTimeblocks = [];
     var setUser = function(user) {
       $scope.user = user;
       UserData.setUser(user);
-      if ($scope.user.inboxes.length > 0) {
-        $scope.allInboxes = 'Your Inboxes: ' + $scope.user.inboxes.map(function(inbox) {return inbox.email;}).join(', ');
-      } else {
-        $scope.allInboxes = null;
-      }
-
       if ($scope.user.lastTzAdj) {
         $scope.user.lastTzAdj = new Date($scope.user.lastTzAdj)
       }

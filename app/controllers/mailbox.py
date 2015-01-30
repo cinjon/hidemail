@@ -110,7 +110,9 @@ def archive(inbox, dt=None):
         except Exception, e:
             pass
 
-    if pageToken:
+    if customer.is_paused(): # stop the archiving if user pauses.
+        logger.debug('Customer %s paused archiving inbox %s.' % (customer.name, inbox.email))
+    elif pageToken:
         app.queue.queues.IQ.get_queue().enqueue(
             app.models.manage_inbox_queue, ('inbox', inbox.id, 'archive'))
     elif not inbox.is_active or not customer.is_init_archiving_complete:
