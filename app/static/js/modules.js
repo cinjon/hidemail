@@ -394,6 +394,10 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
   })
   .controller('faq', function($scope) {
     $scope.faq = [
+      {'question':"Why did you make this?",
+       'answer':"We made this. No one builds anything alone. I got a lot of help along the way."},
+      {'question':"Ok, but really, what was your motivation and does it involve selling my data or reading my email?",
+       'answer':"I built this because I wanted to free myself from constantly checking email and more easily enter a flow when working. I think others want that as well. I charge for this so that I don't need to sell your data and, no, I definitely do not want more email to sift through."},
       {'question':"What if I don't like the time periods I choose?",
        'answer':"Change them. You can do this once every 24 hours."},
       {'question':"What happens when I'm in a new timezone?",
@@ -403,15 +407,13 @@ angular.module('HideMail', ['hidemailServices', 'hidemailDirectives', 'hidemailF
       {'question':"I have 17,000 emails. Are you really going to hide them all from me?",
        'answer':"No. We archive everything older than two weeks. Then we hide your emails from you."},
       {'question':"Wait, what? How do I find my emails if they're archived?",
-       'answer':"Search for them in the top bar. This is probably what you do anyways."},
+       'answer':"Search for them on the top bar. This is probably what you do anyways."},
       {'question':"What if I miss something important?",
        'answer':"It's possible. It's more likely though that it was someone else putting an item on the top of your to-do list."},
-      {'question':"Why did you make this?",
-       'answer':"We made this. No one builds anything alone. I got a lot of help along the way."},
-      {'question':"Ok, but really, what was your motivation and does it involve selling my data?",
-       'answer':"I built this because I wanted to free myself from constantly checking email and more easily settle into a flow when working. I figured others want that as well. I charge for this so that I don't need to sell your data."},
       {'question':"But couldn't you be selling my data as well?",
-       'answer':"It's possible, but I think that it would be really bad if I was and others found out. So I'm not and I feel pretty good about building something that folks want to use."}
+       'answer':"It's possible, but I think that it would be really bad if I was and others found out. So I'm not and I feel pretty good about building something that folks want to use."},
+      {'question':"Is there an emergency pause button for when I absolutely have to be on call?",
+       'answer':"Yes. While the service works best when you use it to batch your emails, there is a pause [resume] button on your profile page after you sign up."}
       ]
   })
   .config([
